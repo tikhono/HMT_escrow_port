@@ -264,9 +264,8 @@ pub fn claim(
     burn_from: &Pubkey,
     pool_mint: &Pubkey,
     token_program_id: &Pubkey,
-    amount: u64,
 ) -> Result<Instruction, ProgramError> {
-    let args = StakePoolInstruction::Withdraw(amount);
+    let args = StakePoolInstruction::Claim;
     let data = args.serialize()?;
     let accounts = vec![
         AccountMeta::new(*stake_pool, false),
@@ -317,7 +316,7 @@ pub fn set_owner(
     stake_pool_new_owner: &Pubkey,
     stake_pool_new_fee_receiver: &Pubkey,
 ) -> Result<Instruction, ProgramError> {
-    let args = StakePoolInstruction::SetStakingAuthority;
+    let args = StakePoolInstruction::SetOwner;
     let data = args.serialize()?;
     let accounts = vec![
         AccountMeta::new(*stake_pool, false),

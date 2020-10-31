@@ -657,10 +657,19 @@ mod tests {
         pub withdraw_authority_key: Pubkey,
         pub fee: Fee,
         pub owner_key: Pubkey,
+        pub owner_account: Account,
         pub owner_fee_key: Pubkey,
         pub owner_fee_account: Account,
         pub mint_key: Pubkey,
         pub mint_account: Account,
+    }
+
+    struct DepositInfo {
+        stake_account_key: Pubkey,
+        stake_account_account: Account,
+        token_receiver_key: Pubkey,
+        token_receiver_account: Account,
+        token_owner_key: Pubkey,
     }
 
     fn do_process_instruction(
@@ -718,7 +727,7 @@ mod tests {
         program_id: &Pubkey,
         mint_key: &Pubkey,
         mint_account: &mut Account,
-    ) -> (Pubkey, Account) {
+    ) -> (Pubkey, Account, Pubkey) {
         let account_key = Pubkey::new_unique();
         let mut account_account = Account::new(
             account_minimum_balance(),
@@ -741,7 +750,7 @@ mod tests {
         )
         .unwrap();
 
-        (account_key, account_account)
+        (account_key, account_account, owner_key)
     }
 
     fn _mint_token(
@@ -751,7 +760,7 @@ mod tests {
         authority_key: &Pubkey,
         amount: u64,
     ) -> (Pubkey, Account) {
-        let (account_key, mut account_account) =
+        let (account_key, mut account_account, _account_owner) =
             create_token_account(program_id, mint_key, mint_account);
         let mut authority_account = Account::default();
 
@@ -774,6 +783,26 @@ mod tests {
         .unwrap();
 
         (account_key, account_account)
+    }
+
+    fn approve_token(
+        program_id: &Pubkey,
+        token_account_pubkey: &Pubkey,
+        mut token_account_account: &mut Account,
+        delegate_pubkey: &Pubkey,
+        owner_pubkey: &Pubkey, 
+        amount: u64,
+    ) {
+        do_process_instruction(
+            spl_token::instruction::approve(&program_id, token_account_pubkey, delegate_pubkey, owner_pubkey, &[], amount)
+            .unwrap(),
+            vec![
+                &mut token_account_account,
+                &mut Account::default(),
+                &mut Account::default(),
+            ],
+        )
+        .unwrap();
     }
 
     fn create_mint(program_id: &Pubkey, authority_key: &Pubkey) -> (Pubkey, Account) {
@@ -813,7 +842,7 @@ mod tests {
         );
 
         let (mint_key, mut mint_account) = create_mint(&TOKEN_PROGRAM_ID, &withdraw_authority_key);
-        let (owner_fee_key, mut owner_fee_account) =
+        let (owner_fee_key, mut owner_fee_account, _) =
             create_token_account(&TOKEN_PROGRAM_ID, &mint_key, &mut mint_account);
 
         // StakePool Init
@@ -847,10 +876,59 @@ mod tests {
             withdraw_authority_key,
             fee,
             owner_key,
+            owner_account,
             owner_fee_key,
             owner_fee_account,
             mint_key,
             mint_account,
+        }
+    }
+
+    fn do_deposit(pool_info: &mut StakePoolInfo, stake_balance: u64) -> DepositInfo {
+        let stake_account_key = Pubkey::new_unique();
+        let mut stake_account_account = Account::new(stake_balance, 100, &stake_program_id());
+        // TODO: Set stake account Withdrawer authority to pool_info.deposit_authority_key
+
+        // Create account to receive minted tokens
+        let (token_receiver_key, mut token_receiver_account, token_owner_key) = create_token_account(
+            &TOKEN_PROGRAM_ID,
+            &pool_info.mint_key,
+            &mut pool_info.mint_account,
+        );
+
+        // Call deposit
+        let _result = do_process_instruction(
+            deposit(
+                &STAKE_POOL_PROGRAM_ID,
+                &pool_info.pool_key,
+                &pool_info.deposit_authority_key,
+                &pool_info.withdraw_authority_key,
+                &stake_account_key,
+                &token_receiver_key,
+                &pool_info.owner_fee_key,
+                &pool_info.mint_key,
+                &TOKEN_PROGRAM_ID,
+            )
+            .unwrap(),
+            vec![
+                &mut pool_info.pool_account,
+                &mut Account::default(),
+                &mut Account::default(),
+                &mut stake_account_account,
+                &mut token_receiver_account,
+                &mut pool_info.owner_fee_account,
+                &mut pool_info.mint_account,
+                &mut Account::default(),
+            ],
+        )
+        .expect("Error on stake pool deposit");
+
+        DepositInfo {
+            stake_account_key,
+            stake_account_account,
+            token_receiver_key,
+            token_receiver_account,
+            token_owner_key
         }
     }
 
@@ -896,43 +974,7 @@ mod tests {
         // Create stake account
         let mut pool_info = create_stake_pool(fee);
 
-        let stake_account_key = Pubkey::new_unique();
-        let mut stake_account_account = Account::new(stake_balance, 100, &stake_program_id());
-        // TODO: Set stake account Withdrawer authority to pool_info.deposit_authority_key
-
-        // Create account to receive minted tokens
-        let (token_receiver_key, mut token_receiver_account) = create_token_account(
-            &TOKEN_PROGRAM_ID,
-            &pool_info.mint_key,
-            &mut pool_info.mint_account,
-        );
-
-        // Call deposit
-        let _result = do_process_instruction(
-            deposit(
-                &STAKE_POOL_PROGRAM_ID,
-                &pool_info.pool_key,
-                &pool_info.deposit_authority_key,
-                &pool_info.withdraw_authority_key,
-                &stake_account_key,
-                &token_receiver_key,
-                &pool_info.owner_fee_key,
-                &pool_info.mint_key,
-                &TOKEN_PROGRAM_ID,
-            )
-            .unwrap(),
-            vec![
-                &mut pool_info.pool_account,
-                &mut Account::default(),
-                &mut Account::default(),
-                &mut stake_account_account,
-                &mut token_receiver_account,
-                &mut pool_info.owner_fee_account,
-                &mut pool_info.mint_account,
-                &mut Account::default(),
-            ],
-        )
-        .expect("Error on stake pool deposit");
+        let deposit_info = do_deposit(&mut pool_info, stake_balance);
 
         // Test stake pool balance
         let state = State::deserialize(&pool_info.pool_account.data).unwrap();
@@ -945,7 +987,7 @@ mod tests {
         }
 
         // Test token balances
-        let user_token_state = SplAccount::unpack_from_slice(&token_receiver_account.data)
+        let user_token_state = SplAccount::unpack_from_slice(&deposit_info.token_receiver_account.data)
             .expect("User token account is not initialized after deposit");
         assert_eq!(user_token_state.amount, user_token_balance);
         let fee_token_state = SplAccount::unpack_from_slice(&pool_info.owner_fee_account.data)
@@ -980,7 +1022,7 @@ mod tests {
         let user_withdrawer_key = Pubkey::new_unique();
         let mut user_withdrawer_account = Account::new(stake_balance, 100, &stake_program_id());
 
-        let (burn_from_key, mut burn_from_account) = create_token_account(
+        let (burn_from_key, mut burn_from_account, _) = create_token_account(
             &TOKEN_PROGRAM_ID,
             &pool_info.mint_key,
             &mut pool_info.mint_account,
@@ -1024,45 +1066,33 @@ mod tests {
             numerator: 2,
         };
 
-        let stake_balance: u64 = sol_to_lamports(10.0);
-        let user_token_balance: u64 = sol_to_lamports(9.8);
-        let fee_token_balance: u64 = sol_to_lamports(0.2);
-        assert_eq!(stake_balance, user_token_balance + fee_token_balance);
-
         let mut pool_info = create_stake_pool(fee);
 
-        let stake_to_recive_key = Pubkey::new_unique();
-        let mut stake_to_recive_account = Account::new(stake_balance, 100, &stake_program_id());
         let user_withdrawer_key = Pubkey::new_unique();
-        let mut user_withdrawer_account = Account::new(stake_balance, 100, &stake_program_id());
 
-        let (burn_from_key, mut burn_from_account) = create_token_account(
-            &TOKEN_PROGRAM_ID,
-            &pool_info.mint_key,
-            &mut pool_info.mint_account,
-        );
+        let stake_balance = 20;
+        let mut deposit_info = do_deposit(&mut pool_info, stake_balance);
 
-        //        _mint_token();
+        approve_token(&TOKEN_PROGRAM_ID, &deposit_info.token_receiver_key, &mut deposit_info.token_receiver_account, &pool_info.withdraw_authority_key, &deposit_info.token_owner_key, 20);
 
         let _result = do_process_instruction(
             claim(
                 &STAKE_POOL_PROGRAM_ID,
                 &pool_info.pool_key,
                 &pool_info.withdraw_authority_key,
-                &stake_to_recive_key,
+                &deposit_info.stake_account_key,
                 &user_withdrawer_key,
-                &burn_from_key,
+                &deposit_info.token_receiver_key,
                 &pool_info.mint_key,
                 &TOKEN_PROGRAM_ID,
-                10,
             )
             .unwrap(),
             vec![
                 &mut pool_info.pool_account,
                 &mut Account::default(),
-                &mut stake_to_recive_account,
-                &mut user_withdrawer_account,
-                &mut burn_from_account,
+                &mut deposit_info.stake_account_account,
+                &mut Account::default(),
+                &mut deposit_info.token_receiver_account,
                 &mut pool_info.mint_account,
                 &mut Account::default(),
             ],
@@ -1113,26 +1143,27 @@ mod tests {
         };
 
         let mut pool_info = create_stake_pool(fee);
-        let stake_balance: u64 = sol_to_lamports(10.0);
 
-        let owner_key = Pubkey::new_unique();
-        let mut owner_account = Account::new(stake_balance, 100, &stake_program_id());
-        let fee_reciver_key = Pubkey::new_unique();
-        let mut fee_reciver_account = Account::new(stake_balance, 100, &stake_program_id());
+        let new_owner_key = Pubkey::new_unique();
+        let mut new_owner_account = Account::default();
+
+        let (new_owner_fee_key, mut new_owner_fee_account, _) =
+            create_token_account(&TOKEN_PROGRAM_ID, &pool_info.mint_key, &mut pool_info.mint_account);
+
         let _result = do_process_instruction(
             set_owner(
                 &STAKE_POOL_PROGRAM_ID,
                 &pool_info.pool_key,
                 &pool_info.owner_key,
-                &owner_key,
-                &fee_reciver_key,
+                &new_owner_key,
+                &new_owner_fee_key,
             )
             .unwrap(),
             vec![
                 &mut pool_info.pool_account,
-                &mut pool_info.owner_fee_account,
-                &mut owner_account,
-                &mut fee_reciver_account,
+                &mut pool_info.owner_account,
+                &mut new_owner_account,
+                &mut new_owner_fee_account,
             ],
         )
         .expect("Error on set_owner");
