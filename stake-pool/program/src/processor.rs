@@ -916,7 +916,11 @@ mod tests {
         do_deposit_custom(pool_info, stake_balance, &mut token)
     }
 
-    fn do_deposit_custom(pool_info: &mut StakePoolInfo, stake_balance: u64, token: &mut TokenInfo) -> DepositInfo {
+    fn do_deposit_custom(
+        pool_info: &mut StakePoolInfo,
+        stake_balance: u64,
+        token: &mut TokenInfo,
+    ) -> DepositInfo {
         let stake_account_key = Pubkey::new_unique();
         let mut stake_account_account = Account::new(stake_balance, 100, &stake_program_id());
         // TODO: Set stake account Withdrawer authority to pool_info.deposit_authority_key
@@ -1076,7 +1080,10 @@ mod tests {
         let user_token_state =
             SplAccount::unpack_from_slice(&deposit_info.token_receiver_account.data)
                 .expect("User token account is not initialized after withdraw");
-        assert_eq!(user_token_state.amount, stake_balance - fee_amount - withdraw_amount);
+        assert_eq!(
+            user_token_state.amount,
+            stake_balance - fee_amount - withdraw_amount
+        );
 
         // Check stake pool token amounts
         let state = State::deserialize(&pool_info.pool_account.data).unwrap();
@@ -1099,15 +1106,17 @@ mod tests {
 
         // Need to deposit more to cover deposit fee
         let fee_amount = stake_balance * FEE_DEFAULT.numerator / FEE_DEFAULT.denominator;
-        let extra_deposit = (fee_amount * FEE_DEFAULT.denominator) / (FEE_DEFAULT.denominator - FEE_DEFAULT.numerator);
-        
+        let extra_deposit = (fee_amount * FEE_DEFAULT.denominator)
+            / (FEE_DEFAULT.denominator - FEE_DEFAULT.numerator);
+
         let mut token_info: TokenInfo = TokenInfo {
             key: deposit_info.token_receiver_key,
             account: deposit_info.token_receiver_account,
-            owner: deposit_info.token_owner_key
+            owner: deposit_info.token_owner_key,
         };
 
-        let mut extra_deposit_info = do_deposit_custom(&mut pool_info, extra_deposit, &mut token_info);
+        let mut extra_deposit_info =
+            do_deposit_custom(&mut pool_info, extra_deposit, &mut token_info);
 
         approve_token(
             &TOKEN_PROGRAM_ID,
@@ -1217,5 +1226,44 @@ mod tests {
                 assert_eq!(stake_pool.owner_fee_account, new_owner_fee.key);
             }
         }
+    }
+    #[test]
+    fn negative_test_set_owner_owner() {
+        let mut pool_info = create_stake_pool_default();
+
+        let new_owner_key = Pubkey::new_unique();
+        let mut new_owner_account = Account::default();
+
+        let mut new_owner_fee = create_token_account(
+            &TOKEN_PROGRAM_ID,
+            &pool_info.mint_key,
+            &mut pool_info.mint_account,
+        );
+
+        let result = do_process_instruction(
+            set_owner(
+                &STAKE_POOL_PROGRAM_ID,
+                &pool_info.pool_key,
+                &Pubkey::new_unique(),
+                &new_owner_key,
+                &new_owner_fee.key,
+            )
+            .unwrap(),
+            vec![
+                &mut pool_info.pool_account,
+                &mut Account::new(100, 100, &stake_program_id()),
+                &mut new_owner_account,
+                &mut new_owner_fee.account,
+            ],
+        );
+        match result {
+            Ok(_) => Err(()),
+            Err(solana_program::program_error::ProgramError::Custom(8)) => Ok(()),
+            Err(e) => {
+                println!("Wrong error \"{:?}\"", e);
+                Err(())
+            }
+        }
+        .expect("AAA")
     }
 }
