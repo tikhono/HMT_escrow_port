@@ -961,6 +961,54 @@ mod tests {
         }
     }
 
+    use solana_program::instruction::AccountMeta;
+
+    pub fn set_staking_authority_without_signer(
+        program_id: &Pubkey,
+        stake_pool: &Pubkey,
+        stake_pool_owner: &Pubkey,
+        stake_pool_withdraw: &Pubkey,
+        stake_account_to_update: &Pubkey,
+        stake_account_new_authority: &Pubkey,
+    ) -> Result<Instruction, ProgramError> {
+        let args = StakePoolInstruction::SetStakingAuthority;
+        let data = args.serialize()?;
+        let accounts = vec![
+            AccountMeta::new(*stake_pool, false),
+            AccountMeta::new_readonly(*stake_pool_owner, false),
+            AccountMeta::new_readonly(*stake_pool_withdraw, false),
+            AccountMeta::new(*stake_account_to_update, false),
+            AccountMeta::new_readonly(*stake_account_new_authority, false),
+        ];
+        Ok(Instruction {
+            program_id: *program_id,
+            accounts,
+            data,
+        })
+    }
+
+    fn set_owner_without_signer(
+        program_id: &Pubkey,
+        stake_pool: &Pubkey,
+        stake_pool_owner: &Pubkey,
+        stake_pool_new_owner: &Pubkey,
+        stake_pool_new_fee_receiver: &Pubkey,
+    ) -> Result<Instruction, ProgramError> {
+        let args = StakePoolInstruction::SetOwner;
+        let data = args.serialize()?;
+        let accounts = vec![
+            AccountMeta::new(*stake_pool, false),
+            AccountMeta::new_readonly(*stake_pool_owner, false),
+            AccountMeta::new_readonly(*stake_pool_new_owner, false),
+            AccountMeta::new_readonly(*stake_pool_new_fee_receiver, false),
+        ];
+        Ok(Instruction {
+            program_id: *program_id,
+            accounts,
+            data,
+        })
+    }
+
     #[test]
     fn test_initialize() {
         let pool_info = create_stake_pool_default();
@@ -1178,13 +1226,89 @@ mod tests {
             .unwrap(),
             vec![
                 &mut pool_info.pool_account,
-                &mut pool_info.owner_fee_account,
+                &mut pool_info.owner_account,
                 &mut Account::default(),
                 &mut stake_account,
                 &mut new_authorithy_account,
             ],
         )
-        .expect("Error on set_owner");
+        .expect("Error on set_staking_authority");
+    }
+    #[test]
+    fn negative_test_set_staking_authority_owner() {
+        let mut pool_info = create_stake_pool_default();
+        let stake_balance: u64 = sol_to_lamports(10.0);
+
+        let stake_key = Pubkey::new_unique();
+        let mut stake_account = Account::new(stake_balance, 100, &stake_program_id());
+        let new_authorithy_key = Pubkey::new_unique();
+        let mut new_authorithy_account = Account::new(stake_balance, 100, &stake_program_id());
+
+        let result = do_process_instruction(
+            set_staking_authority(
+                &STAKE_POOL_PROGRAM_ID,
+                &pool_info.pool_key,
+                &Pubkey::new_unique(),
+                &pool_info.withdraw_authority_key,
+                &stake_key,
+                &new_authorithy_key,
+            )
+            .unwrap(),
+            vec![
+                &mut pool_info.pool_account,
+                &mut Account::default(),
+                &mut Account::default(),
+                &mut stake_account,
+                &mut new_authorithy_account,
+            ],
+        );
+        match result {
+            Ok(_) => Err(()),
+            Err(solana_program::program_error::ProgramError::Custom(8)) => Ok(()),
+            Err(e) => {
+                println!("Wrong error: \"{:?}\"", e);
+                Err(())
+            }
+        }
+        .expect("Failed to get expected error")
+    }
+    #[test]
+    fn negative_test_set_staking_authority_signer() {
+        let mut pool_info = create_stake_pool_default();
+        let stake_balance: u64 = sol_to_lamports(10.0);
+
+        let stake_key = Pubkey::new_unique();
+        let mut stake_account = Account::new(stake_balance, 100, &stake_program_id());
+        let new_authority_key = Pubkey::new_unique();
+        let mut new_authority_account = Account::new(stake_balance, 100, &stake_program_id());
+
+        let result = do_process_instruction(
+            set_staking_authority_without_signer(
+                &STAKE_POOL_PROGRAM_ID,
+                &pool_info.pool_key,
+                &pool_info.owner_key,
+                &pool_info.withdraw_authority_key,
+                &stake_key,
+                &new_authority_key,
+            )
+            .unwrap(),
+            vec![
+                &mut pool_info.pool_account,
+                &mut pool_info.owner_fee_account,
+                &mut Account::default(),
+                &mut stake_account,
+                &mut new_authority_account,
+            ],
+        );
+        match result {
+            Ok(_) => Err(()),
+            Err(solana_program::program_error::ProgramError::Custom(8)) => Ok(()),
+            Err(e) => {
+                println!("Wrong error: \"{:?}\"", e);
+                Err(())
+            }
+        }
+        .expect("Failed to get expected error")
     }
 
     #[test]
@@ -1251,7 +1375,8 @@ mod tests {
             .unwrap(),
             vec![
                 &mut pool_info.pool_account,
-                &mut Account::new(100, 100, &stake_program_id()),
+                &mut Account::default(),
+                //&mut Account::new(100, 100, &stake_program_id()),
                 &mut new_owner_account,
                 &mut new_owner_fee.account,
             ],
@@ -1260,10 +1385,49 @@ mod tests {
             Ok(_) => Err(()),
             Err(solana_program::program_error::ProgramError::Custom(8)) => Ok(()),
             Err(e) => {
-                println!("Wrong error \"{:?}\"", e);
+                println!("Wrong error: \"{:?}\"", e);
                 Err(())
             }
         }
-        .expect("AAA")
+        .expect("Failed to get expected error")
+    }
+    #[test]
+    fn negative_test_set_owner_signer() {
+        let mut pool_info = create_stake_pool_default();
+
+        let new_owner_key = Pubkey::new_unique();
+        let mut new_owner_account = Account::default();
+
+        let mut new_owner_fee = create_token_account(
+            &TOKEN_PROGRAM_ID,
+            &pool_info.mint_key,
+            &mut pool_info.mint_account,
+        );
+
+        let result = do_process_instruction(
+            set_owner_without_signer(
+                &STAKE_POOL_PROGRAM_ID,
+                &pool_info.pool_key,
+                &pool_info.owner_key,
+                &new_owner_key,
+                &new_owner_fee.key,
+            )
+            .unwrap(),
+            vec![
+                &mut pool_info.pool_account,
+                &mut pool_info.owner_account,
+                &mut new_owner_account,
+                &mut new_owner_fee.account,
+            ],
+        );
+        match result {
+            Ok(_) => Err(()),
+            Err(solana_program::program_error::ProgramError::Custom(8)) => Ok(()),
+            Err(e) => {
+                println!("Wrong error: \"{:?}\"", e);
+                Err(())
+            }
+        }
+        .expect("Failed to get expected error")
     }
 }
