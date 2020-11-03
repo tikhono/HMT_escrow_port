@@ -1073,6 +1073,7 @@ mod tests {
             .expect("Mint account is not initialized after deposit");
         assert_eq!(mint_state.supply, stake_balance);
     }
+
     #[test]
     fn test_withdraw() {
         let mut pool_info = create_stake_pool_default();
@@ -1144,6 +1145,57 @@ mod tests {
         }
     }
     #[test]
+    fn negative_test_withdraw_excess_amount() {
+        let mut pool_info = create_stake_pool_default();
+
+        let user_withdrawer_key = Pubkey::new_unique();
+
+        let stake_balance = sol_to_lamports(20.0);
+        let mut deposit_info = do_deposit(&mut pool_info, stake_balance);
+
+        let withdraw_amount = sol_to_lamports(5.0);
+
+        approve_token(
+            &TOKEN_PROGRAM_ID,
+            &deposit_info.token_receiver_key,
+            &mut deposit_info.token_receiver_account,
+            &pool_info.withdraw_authority_key,
+            &deposit_info.token_owner_key,
+            withdraw_amount,
+        );
+
+        let stake_to_receive_key = Pubkey::new_unique();
+        let mut stake_to_receive_account = Account::new(stake_balance, 100, &stake_program_id());
+
+        let result = do_process_instruction(
+            withdraw(
+                &STAKE_POOL_PROGRAM_ID,
+                &pool_info.pool_key,
+                &pool_info.withdraw_authority_key,
+                &deposit_info.stake_account_key,
+                &stake_to_receive_key,
+                &user_withdrawer_key,
+                &deposit_info.token_receiver_key,
+                &pool_info.mint_key,
+                &TOKEN_PROGRAM_ID,
+                withdraw_amount * 2,
+            )
+            .unwrap(),
+            vec![
+                &mut pool_info.pool_account,
+                &mut Account::default(),
+                &mut deposit_info.stake_account_account,
+                &mut stake_to_receive_account,
+                &mut Account::default(),
+                &mut deposit_info.token_receiver_account,
+                &mut pool_info.mint_account,
+                &mut Account::default(),
+            ],
+        );
+        check_error_code(result, ProgramError::Custom(1)).expect("Failed to get expected error")
+    }
+    #[test]
+
     fn test_claim() {
         let mut pool_info = create_stake_pool_default();
 
@@ -1396,6 +1448,7 @@ mod tests {
         check_error_code(result, ProgramError::Custom(1)).expect("Failed to get expected error")
     }
     #[test]
+
     fn test_set_staking_authority() {
         let mut pool_info = create_stake_pool_default();
         let stake_balance: u64 = sol_to_lamports(10.0);
@@ -1590,11 +1643,14 @@ mod tests {
         check_error_code(result, ProgramError::Custom(8)).expect("Failed to get expected error")
     }
 
-    fn check_error_code(result: Result<(), ProgramError>, error: ProgramError) -> Result<(), ()> {
+    fn check_error_code(
+        result: Result<(), ProgramError>,
+        target_error: ProgramError,
+    ) -> Result<(), ()> {
         match result {
             Ok(_) => Err(()),
-            Err(e) => {
-                if error == e {
+            Err(error) => {
+                if error == target_error {
                     Ok(())
                 } else {
                     Err(())
