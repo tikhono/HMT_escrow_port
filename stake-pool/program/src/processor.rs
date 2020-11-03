@@ -305,7 +305,7 @@ impl Processor {
         let withdraw_info = next_account_info(account_info_iter)?;
         // Stake account to split
         let stake_split_from = next_account_info(account_info_iter)?;
-        // Unitialized stake account to receive withdrawal
+        // Uninitialized stake account to receive withdrawal
         let stake_split_to = next_account_info(account_info_iter)?;
         // User account to set as a new withdraw authority
         let user_stake_authority = next_account_info(account_info_iter)?;
@@ -1258,15 +1258,7 @@ mod tests {
                 &mut Account::default(),
             ],
         );
-        match result {
-            Ok(_) => Err(()),
-            Err(solana_program::program_error::ProgramError::Custom(1)) => Ok(()),
-            Err(e) => {
-                println!("Wrong error: \"{:?}\"", e);
-                Err(())
-            }
-        }
-        .expect("Failed to get expected error")
+        check_error_code(result, ProgramError::Custom(1)).expect("Failed to get expected error")
     }
     #[test]
     fn negative_test_claim_withdraw() {
@@ -1322,15 +1314,7 @@ mod tests {
                 &mut Account::default(),
             ],
         );
-        match result {
-            Ok(_) => Err(()),
-            Err(solana_program::program_error::ProgramError::Custom(4)) => Ok(()),
-            Err(e) => {
-                println!("Wrong error: \"{:?}\"", e);
-                Err(())
-            }
-        }
-        .expect("Failed to get expected error")
+        check_error_code(result, ProgramError::Custom(4)).expect("Failed to get expected error")
     }
     #[test]
     fn negative_test_claim_twice() {
@@ -1409,15 +1393,7 @@ mod tests {
                 &mut Account::default(),
             ],
         );
-        match result {
-            Ok(_) => Err(()),
-            Err(solana_program::program_error::ProgramError::Custom(1)) => Ok(()),
-            Err(e) => {
-                println!("Wrong error: \"{:?}\"", e);
-                Err(())
-            }
-        }
-        .expect("Failed to get expected error")
+        check_error_code(result, ProgramError::Custom(1)).expect("Failed to get expected error")
     }
     #[test]
     fn test_set_staking_authority() {
@@ -1426,8 +1402,8 @@ mod tests {
 
         let stake_key = Pubkey::new_unique();
         let mut stake_account = Account::new(stake_balance, 100, &stake_program_id());
-        let new_authorithy_key = Pubkey::new_unique();
-        let mut new_authorithy_account = Account::new(stake_balance, 100, &stake_program_id());
+        let new_authority_key = Pubkey::new_unique();
+        let mut new_authority_account = Account::new(stake_balance, 100, &stake_program_id());
 
         let _result = do_process_instruction(
             set_staking_authority(
@@ -1436,7 +1412,7 @@ mod tests {
                 &pool_info.owner_key,
                 &pool_info.withdraw_authority_key,
                 &stake_key,
-                &new_authorithy_key,
+                &new_authority_key,
             )
             .unwrap(),
             vec![
@@ -1444,7 +1420,7 @@ mod tests {
                 &mut pool_info.owner_account,
                 &mut Account::default(),
                 &mut stake_account,
-                &mut new_authorithy_account,
+                &mut new_authority_account,
             ],
         )
         .expect("Error on set_staking_authority");
@@ -1456,8 +1432,8 @@ mod tests {
 
         let stake_key = Pubkey::new_unique();
         let mut stake_account = Account::new(stake_balance, 100, &stake_program_id());
-        let new_authorithy_key = Pubkey::new_unique();
-        let mut new_authorithy_account = Account::new(stake_balance, 100, &stake_program_id());
+        let new_authority_key = Pubkey::new_unique();
+        let mut new_authority_account = Account::new(stake_balance, 100, &stake_program_id());
 
         let result = do_process_instruction(
             set_staking_authority(
@@ -1466,7 +1442,7 @@ mod tests {
                 &Pubkey::new_unique(),
                 &pool_info.withdraw_authority_key,
                 &stake_key,
-                &new_authorithy_key,
+                &new_authority_key,
             )
             .unwrap(),
             vec![
@@ -1474,18 +1450,10 @@ mod tests {
                 &mut Account::default(),
                 &mut Account::default(),
                 &mut stake_account,
-                &mut new_authorithy_account,
+                &mut new_authority_account,
             ],
         );
-        match result {
-            Ok(_) => Err(()),
-            Err(solana_program::program_error::ProgramError::Custom(8)) => Ok(()),
-            Err(e) => {
-                println!("Wrong error: \"{:?}\"", e);
-                Err(())
-            }
-        }
-        .expect("Failed to get expected error")
+        check_error_code(result, ProgramError::Custom(8)).expect("Failed to get expected error")
     }
     #[test]
     fn negative_test_set_staking_authority_signer() {
@@ -1515,15 +1483,7 @@ mod tests {
                 &mut new_authority_account,
             ],
         );
-        match result {
-            Ok(_) => Err(()),
-            Err(solana_program::program_error::ProgramError::Custom(8)) => Ok(()),
-            Err(e) => {
-                println!("Wrong error: \"{:?}\"", e);
-                Err(())
-            }
-        }
-        .expect("Failed to get expected error")
+        check_error_code(result, ProgramError::Custom(8)).expect("Failed to get expected error")
     }
 
     #[test]
@@ -1596,15 +1556,7 @@ mod tests {
                 &mut new_owner_fee.account,
             ],
         );
-        match result {
-            Ok(_) => Err(()),
-            Err(solana_program::program_error::ProgramError::Custom(8)) => Ok(()),
-            Err(e) => {
-                println!("Wrong error: \"{:?}\"", e);
-                Err(())
-            }
-        }
-        .expect("Failed to get expected error")
+        check_error_code(result, ProgramError::Custom(8)).expect("Failed to get expected error")
     }
     #[test]
     fn negative_test_set_owner_signer() {
@@ -1635,14 +1587,19 @@ mod tests {
                 &mut new_owner_fee.account,
             ],
         );
+        check_error_code(result, ProgramError::Custom(8)).expect("Failed to get expected error")
+    }
+
+    fn check_error_code(result: Result<(), ProgramError>, error: ProgramError) -> Result<(), ()> {
         match result {
             Ok(_) => Err(()),
-            Err(solana_program::program_error::ProgramError::Custom(8)) => Ok(()),
             Err(e) => {
-                println!("Wrong error: \"{:?}\"", e);
-                Err(())
+                if error == e {
+                    Ok(())
+                } else {
+                    Err(())
+                }
             }
         }
-        .expect("Failed to get expected error")
     }
 }
