@@ -1205,6 +1205,221 @@ mod tests {
         assert_eq!(user_token_state.amount, 0);
     }
     #[test]
+    fn negative_test_claim_excess_burn() {
+        let mut pool_info = create_stake_pool_default();
+
+        let user_withdrawer_key = Pubkey::new_unique();
+
+        let stake_balance = sol_to_lamports(20.0);
+        let mut deposit_info = do_deposit(&mut pool_info, stake_balance);
+
+        // Need to deposit more to cover deposit fee
+        let fee_amount = stake_balance * FEE_DEFAULT.numerator / FEE_DEFAULT.denominator;
+        let extra_deposit = (fee_amount * FEE_DEFAULT.denominator)
+            / (FEE_DEFAULT.denominator - FEE_DEFAULT.numerator);
+
+        let mut token_info: TokenInfo = TokenInfo {
+            key: deposit_info.token_receiver_key,
+            account: deposit_info.token_receiver_account,
+            owner: deposit_info.token_owner_key,
+        };
+
+        let mut extra_deposit_info =
+            do_deposit_custom(&mut pool_info, extra_deposit, &mut token_info);
+
+        approve_token(
+            &TOKEN_PROGRAM_ID,
+            &deposit_info.token_receiver_key,
+            &mut extra_deposit_info.token_receiver_account,
+            &pool_info.withdraw_authority_key,
+            &deposit_info.token_owner_key,
+            stake_balance / 2,
+        );
+
+        let result = do_process_instruction(
+            claim(
+                &STAKE_POOL_PROGRAM_ID,
+                &pool_info.pool_key,
+                &pool_info.withdraw_authority_key,
+                &deposit_info.stake_account_key,
+                &user_withdrawer_key,
+                &deposit_info.token_receiver_key,
+                &pool_info.mint_key,
+                &TOKEN_PROGRAM_ID,
+            )
+            .unwrap(),
+            vec![
+                &mut pool_info.pool_account,
+                &mut Account::default(),
+                &mut deposit_info.stake_account_account,
+                &mut Account::default(),
+                &mut extra_deposit_info.token_receiver_account,
+                &mut pool_info.mint_account,
+                &mut Account::default(),
+            ],
+        );
+        match result {
+            Ok(_) => Err(()),
+            Err(solana_program::program_error::ProgramError::Custom(1)) => Ok(()),
+            Err(e) => {
+                println!("Wrong error: \"{:?}\"", e);
+                Err(())
+            }
+        }
+        .expect("Failed to get expected error")
+    }
+    #[test]
+    fn negative_test_claim_withdraw() {
+        let mut pool_info = create_stake_pool_default();
+
+        let user_withdrawer_key = Pubkey::new_unique();
+
+        let stake_balance = sol_to_lamports(20.0);
+        let mut deposit_info = do_deposit(&mut pool_info, stake_balance);
+
+        // Need to deposit more to cover deposit fee
+        let fee_amount = stake_balance * FEE_DEFAULT.numerator / FEE_DEFAULT.denominator;
+        let extra_deposit = (fee_amount * FEE_DEFAULT.denominator)
+            / (FEE_DEFAULT.denominator - FEE_DEFAULT.numerator);
+
+        let mut token_info: TokenInfo = TokenInfo {
+            key: deposit_info.token_receiver_key,
+            account: deposit_info.token_receiver_account,
+            owner: deposit_info.token_owner_key,
+        };
+
+        let mut extra_deposit_info =
+            do_deposit_custom(&mut pool_info, extra_deposit, &mut token_info);
+
+        approve_token(
+            &TOKEN_PROGRAM_ID,
+            &deposit_info.token_receiver_key,
+            &mut extra_deposit_info.token_receiver_account,
+            &pool_info.deposit_authority_key,
+            &deposit_info.token_owner_key,
+            stake_balance,
+        );
+
+        let result = do_process_instruction(
+            claim(
+                &STAKE_POOL_PROGRAM_ID,
+                &pool_info.pool_key,
+                &pool_info.withdraw_authority_key,
+                &deposit_info.stake_account_key,
+                &user_withdrawer_key,
+                &deposit_info.token_receiver_key,
+                &pool_info.mint_key,
+                &TOKEN_PROGRAM_ID,
+            )
+            .unwrap(),
+            vec![
+                &mut pool_info.pool_account,
+                &mut Account::default(),
+                &mut deposit_info.stake_account_account,
+                &mut Account::default(),
+                &mut extra_deposit_info.token_receiver_account,
+                &mut pool_info.mint_account,
+                &mut Account::default(),
+            ],
+        );
+        match result {
+            Ok(_) => Err(()),
+            Err(solana_program::program_error::ProgramError::Custom(4)) => Ok(()),
+            Err(e) => {
+                println!("Wrong error: \"{:?}\"", e);
+                Err(())
+            }
+        }
+        .expect("Failed to get expected error")
+    }
+    #[test]
+    fn negative_test_claim_twice() {
+        let mut pool_info = create_stake_pool_default();
+
+        let user_withdrawer_key = Pubkey::new_unique();
+
+        let stake_balance = sol_to_lamports(20.0);
+        let mut deposit_info = do_deposit(&mut pool_info, stake_balance);
+
+        // Need to deposit more to cover deposit fee
+        let fee_amount = stake_balance * FEE_DEFAULT.numerator / FEE_DEFAULT.denominator;
+        let extra_deposit = (fee_amount * FEE_DEFAULT.denominator)
+            / (FEE_DEFAULT.denominator - FEE_DEFAULT.numerator);
+
+        let mut token_info: TokenInfo = TokenInfo {
+            key: deposit_info.token_receiver_key,
+            account: deposit_info.token_receiver_account,
+            owner: deposit_info.token_owner_key,
+        };
+
+        let mut extra_deposit_info =
+            do_deposit_custom(&mut pool_info, extra_deposit, &mut token_info);
+
+        approve_token(
+            &TOKEN_PROGRAM_ID,
+            &deposit_info.token_receiver_key,
+            &mut extra_deposit_info.token_receiver_account,
+            &pool_info.withdraw_authority_key,
+            &deposit_info.token_owner_key,
+            stake_balance,
+        );
+
+        do_process_instruction(
+            claim(
+                &STAKE_POOL_PROGRAM_ID,
+                &pool_info.pool_key,
+                &pool_info.withdraw_authority_key,
+                &deposit_info.stake_account_key,
+                &user_withdrawer_key,
+                &deposit_info.token_receiver_key,
+                &pool_info.mint_key,
+                &TOKEN_PROGRAM_ID,
+            )
+            .unwrap(),
+            vec![
+                &mut pool_info.pool_account,
+                &mut Account::default(),
+                &mut deposit_info.stake_account_account,
+                &mut Account::default(),
+                &mut extra_deposit_info.token_receiver_account,
+                &mut pool_info.mint_account,
+                &mut Account::default(),
+            ],
+        )
+        .expect("Error on claim");
+        let result = do_process_instruction(
+            claim(
+                &STAKE_POOL_PROGRAM_ID,
+                &pool_info.pool_key,
+                &pool_info.withdraw_authority_key,
+                &deposit_info.stake_account_key,
+                &user_withdrawer_key,
+                &deposit_info.token_receiver_key,
+                &pool_info.mint_key,
+                &TOKEN_PROGRAM_ID,
+            )
+            .unwrap(),
+            vec![
+                &mut pool_info.pool_account,
+                &mut Account::default(),
+                &mut deposit_info.stake_account_account,
+                &mut Account::default(),
+                &mut extra_deposit_info.token_receiver_account,
+                &mut pool_info.mint_account,
+                &mut Account::default(),
+            ],
+        );
+        match result {
+            Ok(_) => Err(()),
+            Err(solana_program::program_error::ProgramError::Custom(1)) => Ok(()),
+            Err(e) => {
+                println!("Wrong error: \"{:?}\"", e);
+                Err(())
+            }
+        }
+        .expect("Failed to get expected error")
+    }
+    #[test]
     fn test_set_staking_authority() {
         let mut pool_info = create_stake_pool_default();
         let stake_balance: u64 = sol_to_lamports(10.0);
