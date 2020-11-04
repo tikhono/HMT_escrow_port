@@ -1,6 +1,7 @@
 target
 .env
 .vscode
+.idea
 bin
 config.json
 node_modules

@@ -1194,8 +1194,8 @@ mod tests {
         );
         check_error_code(result, ProgramError::Custom(1)).expect("Failed to get expected error")
     }
-    #[test]
 
+    #[test]
     fn test_claim() {
         let mut pool_info = create_stake_pool_default();
 
@@ -1447,8 +1447,8 @@ mod tests {
         );
         check_error_code(result, ProgramError::Custom(1)).expect("Failed to get expected error")
     }
-    #[test]
 
+    #[test]
     fn test_set_staking_authority() {
         let mut pool_info = create_stake_pool_default();
         let stake_balance: u64 = sol_to_lamports(10.0);
