@@ -712,6 +712,7 @@ mod tests {
     }
 
     struct DepositInfo {
+        result: ProgramResult,
         stake_account_key: Pubkey,
         stake_account_account: Account,
     }
@@ -961,7 +962,7 @@ mod tests {
         // TODO: Set stake account Withdrawer authority to pool_info.deposit_authority_key
 
         // Call deposit
-        let _result = do_process_instruction(
+        let result = do_process_instruction(
             deposit(
                 &STAKE_POOL_PROGRAM_ID,
                 &pool_info.pool_key,
@@ -987,10 +988,10 @@ mod tests {
                 &mut Account::default(),
                 &mut Account::default(),
             ],
-        )
-        .expect("Error on stake pool deposit");
+        );
 
         DepositInfo {
+            result,
             stake_account_key,
             stake_account_account,
         }
@@ -1085,12 +1086,16 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_deposit() {
-        let fee = Fee {
-            denominator: 100,
-            numerator: 2,
-        };
+    struct Deposit {
+        stake_balance: u64,
+        tokens_to_issue: u64,
+        user_token_balance: u64,
+        fee_token_balance: u64,
+        pool_info: StakePoolInfo,
+        pool_token_receiver: TokenInfo,
+    }
+
+    fn initialize_deposit_test() -> Deposit {
         let stake_balance: u64 = 10_000_000_000;
         let tokens_to_issue: u64 = 10_000_000_000;
         let user_token_balance: u64 = 9_800_000_000;
@@ -1098,35 +1103,87 @@ mod tests {
         assert_eq!(tokens_to_issue, user_token_balance + fee_token_balance);
 
         // Create stake account
-        let mut pool_info = create_stake_pool(fee);
+        let mut pool_info = create_stake_pool(Fee {
+            denominator: 100,
+            numerator: 2,
+        });
 
-        let mut pool_token_receiver = create_token_account(
+        let pool_token_receiver = create_token_account(
             &TOKEN_PROGRAM_ID,
             &pool_info.mint_key,
             &mut pool_info.mint_account,
         );
-        let _deposit_info = do_deposit(&mut pool_info, stake_balance, &mut pool_token_receiver);
 
+        Deposit {
+            stake_balance,
+            tokens_to_issue,
+            user_token_balance,
+            fee_token_balance,
+            pool_info,
+            pool_token_receiver,
+        }
+    }
+    #[test]
+    fn test_deposit() {
+        let mut test_data = initialize_deposit_test();
+
+        let deposit_info = do_deposit(
+            &mut test_data.pool_info,
+            test_data.stake_balance,
+            &mut test_data.pool_token_receiver,
+        );
+
+        deposit_info.result.expect("Fail on deposit");
         // Test stake pool balance
-        let state = State::deserialize(&pool_info.pool_account.data).unwrap();
+        let state = State::deserialize(&test_data.pool_info.pool_account.data).unwrap();
         assert!(
-            matches!(state, State::Init(stake_pool) if stake_pool.stake_total == stake_balance && stake_pool.pool_total == tokens_to_issue)
+            matches!(state, State::Init(stake_pool) if stake_pool.stake_total == test_data.stake_balance && stake_pool.pool_total == test_data.tokens_to_issue)
         );
 
         // Test token balances
-        let user_token_state = SplAccount::unpack_from_slice(&pool_token_receiver.account.data)
-            .expect("User token account is not initialized after deposit");
-        assert_eq!(user_token_state.amount, user_token_balance);
-        let fee_token_state = SplAccount::unpack_from_slice(&pool_info.owner_fee_account.data)
-            .expect("Fee token account is not initialized after deposit");
-        assert_eq!(fee_token_state.amount, fee_token_balance);
+        let user_token_state =
+            SplAccount::unpack_from_slice(&test_data.pool_token_receiver.account.data)
+                .expect("User token account is not initialized after deposit");
+        assert_eq!(user_token_state.amount, test_data.user_token_balance);
+        let fee_token_state =
+            SplAccount::unpack_from_slice(&test_data.pool_info.owner_fee_account.data)
+                .expect("Fee token account is not initialized after deposit");
+        assert_eq!(fee_token_state.amount, test_data.fee_token_balance);
 
         // Test mint total issued tokens
-        let mint_state = SplMint::unpack_from_slice(&pool_info.mint_account.data)
+        let mint_state = SplMint::unpack_from_slice(&test_data.pool_info.mint_account.data)
             .expect("Mint account is not initialized after deposit");
-        assert_eq!(mint_state.supply, stake_balance);
+        assert_eq!(mint_state.supply, test_data.stake_balance);
 
         // TODO: Check stake account Withdrawer to match stake pool withdraw authority
+    }
+    #[test]
+    fn negative_test_deposit_wrong_withdraw_authority() {
+        let mut test_data = initialize_deposit_test();
+        test_data.pool_info.withdraw_authority_key = Pubkey::new_unique();
+
+        let deposit_info = do_deposit(
+            &mut test_data.pool_info,
+            test_data.stake_balance,
+            &mut test_data.pool_token_receiver,
+        );
+
+        check_error_code(deposit_info.result, ProgramError::Custom(1))
+            .expect("Failed to get expected error")
+    }
+    #[test]
+    fn negative_test_deposit_wrong_deposit_authority() {
+        let mut test_data = initialize_deposit_test();
+        test_data.pool_info.deposit_authority_key = Pubkey::new_unique();
+
+        let deposit_info = do_deposit(
+            &mut test_data.pool_info,
+            test_data.stake_balance,
+            &mut test_data.pool_token_receiver,
+        );
+
+        check_error_code(deposit_info.result, ProgramError::Custom(1))
+            .expect("Failed to get expected error")
     }
 
     #[test]
