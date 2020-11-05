@@ -609,8 +609,8 @@ mod tests {
     use super::*;
     use crate::instruction::*;
     use solana_program::{
-        instruction::Instruction, native_token::sol_to_lamports, program_pack::Pack, program_stubs,
-        rent::Rent,
+        instruction::AccountMeta, instruction::Instruction, native_token::sol_to_lamports,
+        program_pack::Pack, program_stubs, rent::Rent, sysvar,
     };
     use solana_sdk::account::{create_account, create_is_signer_account_infos, Account};
     use spl_token::{
@@ -996,6 +996,71 @@ mod tests {
         }
     }
 
+    fn set_staking_authority_without_signer(
+        program_id: &Pubkey,
+        stake_pool: &Pubkey,
+        stake_pool_owner: &Pubkey,
+        stake_pool_withdraw: &Pubkey,
+        stake_account_to_update: &Pubkey,
+        stake_account_new_authority: &Pubkey,
+        stake_program_id: &Pubkey,
+    ) -> Result<Instruction, ProgramError> {
+        let args = StakePoolInstruction::SetStakingAuthority;
+        let data = args.serialize()?;
+        let accounts = vec![
+            AccountMeta::new(*stake_pool, false),
+            AccountMeta::new_readonly(*stake_pool_owner, false),
+            AccountMeta::new_readonly(*stake_pool_withdraw, false),
+            AccountMeta::new(*stake_account_to_update, false),
+            AccountMeta::new_readonly(*stake_account_new_authority, false),
+            AccountMeta::new_readonly(sysvar::clock::id(), false),
+            AccountMeta::new_readonly(*stake_program_id, false),
+        ];
+        Ok(Instruction {
+            program_id: *program_id,
+            accounts,
+            data,
+        })
+    }
+
+    fn set_owner_without_signer(
+        program_id: &Pubkey,
+        stake_pool: &Pubkey,
+        stake_pool_owner: &Pubkey,
+        stake_pool_new_owner: &Pubkey,
+        stake_pool_new_fee_receiver: &Pubkey,
+    ) -> Result<Instruction, ProgramError> {
+        let args = StakePoolInstruction::SetOwner;
+        let data = args.serialize()?;
+        let accounts = vec![
+            AccountMeta::new(*stake_pool, false),
+            AccountMeta::new_readonly(*stake_pool_owner, false),
+            AccountMeta::new_readonly(*stake_pool_new_owner, false),
+            AccountMeta::new_readonly(*stake_pool_new_fee_receiver, false),
+        ];
+        Ok(Instruction {
+            program_id: *program_id,
+            accounts,
+            data,
+        })
+    }
+
+    fn check_error_code(
+        result: Result<(), ProgramError>,
+        target_error: ProgramError,
+    ) -> Result<(), ()> {
+        match result {
+            Ok(_) => Err(()),
+            Err(error) => {
+                if error == target_error {
+                    Ok(())
+                } else {
+                    Err(())
+                }
+            }
+        }
+    }
+
     #[test]
     fn test_initialize() {
         let pool_info = create_stake_pool_default();
@@ -1063,6 +1128,7 @@ mod tests {
 
         // TODO: Check stake account Withdrawer to match stake pool withdraw authority
     }
+
     #[test]
     fn test_withdraw() {
         let mut pool_info = create_stake_pool_default();
@@ -1141,6 +1207,68 @@ mod tests {
         );
     }
     #[test]
+    fn negative_test_withdraw_excess_amount() {
+        let mut pool_info = create_stake_pool_default();
+
+        let user_withdrawer_key = Pubkey::new_unique();
+
+        let stake_balance = sol_to_lamports(20.0);
+
+        let mut pool_token_receiver = create_token_account(
+            &TOKEN_PROGRAM_ID,
+            &pool_info.mint_key,
+            &mut pool_info.mint_account,
+        );
+        let mut deposit_info = do_deposit(&mut pool_info, stake_balance, &mut pool_token_receiver);
+
+        let withdraw_amount = sol_to_lamports(5.0);
+        let tokens_to_burn: u64 = 5_000_000_000;
+
+        approve_token(
+            &TOKEN_PROGRAM_ID,
+            &pool_token_receiver.key,
+            &mut pool_token_receiver.account,
+            &pool_info.withdraw_authority_key,
+            &pool_token_receiver.owner,
+            tokens_to_burn,
+        );
+
+        let stake_to_receive_key = Pubkey::new_unique();
+        let mut stake_to_receive_account =
+            Account::new(stake_balance, STAKE_ACCOUNT_LEN, &stake_program_id());
+
+        let result = do_process_instruction(
+            withdraw(
+                &STAKE_POOL_PROGRAM_ID,
+                &pool_info.pool_key,
+                &pool_info.withdraw_authority_key,
+                &deposit_info.stake_account_key,
+                &stake_to_receive_key,
+                &user_withdrawer_key,
+                &pool_token_receiver.key,
+                &pool_info.mint_key,
+                &TOKEN_PROGRAM_ID,
+                &stake_program_id(),
+                withdraw_amount * 2,
+            )
+            .unwrap(),
+            vec![
+                &mut pool_info.pool_account,
+                &mut Account::default(),
+                &mut deposit_info.stake_account_account,
+                &mut stake_to_receive_account,
+                &mut Account::default(),
+                &mut pool_token_receiver.account,
+                &mut pool_info.mint_account,
+                &mut Account::default(),
+                &mut Account::default(),
+                &mut Account::default(),
+            ],
+        );
+        check_error_code(result, ProgramError::Custom(1)).expect("Failed to get expected error")
+    }
+
+    #[test]
     fn test_claim() {
         let mut pool_info = create_stake_pool_default();
 
@@ -1206,6 +1334,211 @@ mod tests {
         // TODO: Check deposit_info.stake_account_account Withdrawer to change to user_withdrawer_key
     }
     #[test]
+    fn negative_test_claim_excess_burn() {
+        let mut pool_info = create_stake_pool_default();
+
+        let user_withdrawer_key = Pubkey::new_unique();
+
+        let stake_balance = sol_to_lamports(20.0);
+
+        let mut pool_token_receiver = create_token_account(
+            &TOKEN_PROGRAM_ID,
+            &pool_info.mint_key,
+            &mut pool_info.mint_account,
+        );
+        let mut deposit_info = do_deposit(&mut pool_info, stake_balance, &mut pool_token_receiver);
+
+        // Need to deposit more to cover deposit fee
+        let fee_amount = stake_balance * pool_info.fee.numerator / pool_info.fee.denominator;
+        let extra_deposit = (fee_amount * pool_info.fee.denominator)
+            / (pool_info.fee.denominator - pool_info.fee.numerator);
+
+        let _extra_deposit_info =
+            do_deposit(&mut pool_info, extra_deposit, &mut pool_token_receiver);
+
+        approve_token(
+            &TOKEN_PROGRAM_ID,
+            &pool_token_receiver.key,
+            &mut pool_token_receiver.account,
+            &pool_info.withdraw_authority_key,
+            &pool_token_receiver.owner,
+            stake_balance / 2,
+        );
+
+        let result = do_process_instruction(
+            claim(
+                &STAKE_POOL_PROGRAM_ID,
+                &pool_info.pool_key,
+                &pool_info.withdraw_authority_key,
+                &deposit_info.stake_account_key,
+                &user_withdrawer_key,
+                &pool_token_receiver.key,
+                &pool_info.mint_key,
+                &TOKEN_PROGRAM_ID,
+                &stake_program_id(),
+            )
+            .unwrap(),
+            vec![
+                &mut pool_info.pool_account,
+                &mut Account::default(),
+                &mut deposit_info.stake_account_account,
+                &mut Account::default(),
+                &mut pool_token_receiver.account,
+                &mut pool_info.mint_account,
+                &mut Account::default(),
+                &mut Account::default(),
+                &mut Account::default(),
+            ],
+        );
+        check_error_code(result, ProgramError::Custom(1)).expect("Failed to get expected error")
+    }
+    #[test]
+    fn negative_test_claim_deposit_instead_of_withdraw() {
+        let mut pool_info = create_stake_pool_default();
+
+        let user_withdrawer_key = Pubkey::new_unique();
+
+        let stake_balance = sol_to_lamports(20.0);
+
+        let mut pool_token_receiver = create_token_account(
+            &TOKEN_PROGRAM_ID,
+            &pool_info.mint_key,
+            &mut pool_info.mint_account,
+        );
+        let mut deposit_info = do_deposit(&mut pool_info, stake_balance, &mut pool_token_receiver);
+
+        // Need to deposit more to cover deposit fee
+        let fee_amount = stake_balance * pool_info.fee.numerator / pool_info.fee.denominator;
+        let extra_deposit = (fee_amount * pool_info.fee.denominator)
+            / (pool_info.fee.denominator - pool_info.fee.numerator);
+
+        let _extra_deposit_info =
+            do_deposit(&mut pool_info, extra_deposit, &mut pool_token_receiver);
+
+        approve_token(
+            &TOKEN_PROGRAM_ID,
+            &pool_token_receiver.key,
+            &mut pool_token_receiver.account,
+            &pool_info.deposit_authority_key,
+            &pool_token_receiver.owner,
+            stake_balance,
+        );
+
+        let result = do_process_instruction(
+            claim(
+                &STAKE_POOL_PROGRAM_ID,
+                &pool_info.pool_key,
+                &pool_info.withdraw_authority_key,
+                &deposit_info.stake_account_key,
+                &user_withdrawer_key,
+                &pool_token_receiver.key,
+                &pool_info.mint_key,
+                &TOKEN_PROGRAM_ID,
+                &stake_program_id(),
+            )
+            .unwrap(),
+            vec![
+                &mut pool_info.pool_account,
+                &mut Account::default(),
+                &mut deposit_info.stake_account_account,
+                &mut Account::default(),
+                &mut pool_token_receiver.account,
+                &mut pool_info.mint_account,
+                &mut Account::default(),
+                &mut Account::default(),
+                &mut Account::default(),
+            ],
+        );
+        check_error_code(result, ProgramError::Custom(4)).expect("Failed to get expected error")
+    }
+    #[test]
+    fn negative_test_claim_twice() {
+        let mut pool_info = create_stake_pool_default();
+
+        let user_withdrawer_key = Pubkey::new_unique();
+
+        let stake_balance = sol_to_lamports(20.0);
+
+        let mut pool_token_receiver = create_token_account(
+            &TOKEN_PROGRAM_ID,
+            &pool_info.mint_key,
+            &mut pool_info.mint_account,
+        );
+        let mut deposit_info = do_deposit(&mut pool_info, stake_balance, &mut pool_token_receiver);
+
+        // Need to deposit more to cover deposit fee
+        let fee_amount = stake_balance * pool_info.fee.numerator / pool_info.fee.denominator;
+        let extra_deposit = (fee_amount * pool_info.fee.denominator)
+            / (pool_info.fee.denominator - pool_info.fee.numerator);
+
+        let _extra_deposit_info =
+            do_deposit(&mut pool_info, extra_deposit, &mut pool_token_receiver);
+
+        approve_token(
+            &TOKEN_PROGRAM_ID,
+            &pool_token_receiver.key,
+            &mut pool_token_receiver.account,
+            &pool_info.withdraw_authority_key,
+            &pool_token_receiver.owner,
+            stake_balance,
+        );
+
+        do_process_instruction(
+            claim(
+                &STAKE_POOL_PROGRAM_ID,
+                &pool_info.pool_key,
+                &pool_info.withdraw_authority_key,
+                &deposit_info.stake_account_key,
+                &user_withdrawer_key,
+                &pool_token_receiver.key,
+                &pool_info.mint_key,
+                &TOKEN_PROGRAM_ID,
+                &stake_program_id(),
+            )
+            .unwrap(),
+            vec![
+                &mut pool_info.pool_account,
+                &mut Account::default(),
+                &mut deposit_info.stake_account_account,
+                &mut Account::default(),
+                &mut pool_token_receiver.account,
+                &mut pool_info.mint_account,
+                &mut Account::default(),
+                &mut Account::default(),
+                &mut Account::default(),
+            ],
+        )
+        .expect("Error on claim");
+
+        let result = do_process_instruction(
+            claim(
+                &STAKE_POOL_PROGRAM_ID,
+                &pool_info.pool_key,
+                &pool_info.withdraw_authority_key,
+                &deposit_info.stake_account_key,
+                &user_withdrawer_key,
+                &pool_token_receiver.key,
+                &pool_info.mint_key,
+                &TOKEN_PROGRAM_ID,
+                &stake_program_id(),
+            )
+            .unwrap(),
+            vec![
+                &mut pool_info.pool_account,
+                &mut Account::default(),
+                &mut deposit_info.stake_account_account,
+                &mut Account::default(),
+                &mut pool_token_receiver.account,
+                &mut pool_info.mint_account,
+                &mut Account::default(),
+                &mut Account::default(),
+                &mut Account::default(),
+            ],
+        );
+        check_error_code(result, ProgramError::Custom(1)).expect("Failed to get expected error")
+    }
+
+    #[test]
     fn test_set_staking_authority() {
         let mut pool_info = create_stake_pool_default();
         let stake_balance: u64 = sol_to_lamports(10.0);
@@ -1238,6 +1571,74 @@ mod tests {
             ],
         )
         .expect("Error on set_owner");
+    }
+    #[test]
+    fn negative_test_set_staking_authority_owner() {
+        let mut pool_info = create_stake_pool_default();
+        let stake_balance: u64 = sol_to_lamports(10.0);
+
+        let stake_key = Pubkey::new_unique();
+        let mut stake_account = Account::new(stake_balance, STAKE_ACCOUNT_LEN, &stake_program_id());
+        let new_authorithy_key = Pubkey::new_unique();
+        let mut new_authorithy_account =
+            Account::new(stake_balance, STAKE_ACCOUNT_LEN, &stake_program_id());
+
+        let result = do_process_instruction(
+            set_staking_authority(
+                &STAKE_POOL_PROGRAM_ID,
+                &pool_info.pool_key,
+                &Pubkey::new_unique(),
+                &pool_info.withdraw_authority_key,
+                &stake_key,
+                &new_authorithy_key,
+                &stake_program_id(),
+            )
+            .unwrap(),
+            vec![
+                &mut pool_info.pool_account,
+                &mut Account::default(),
+                &mut Account::default(),
+                &mut stake_account,
+                &mut new_authorithy_account,
+                &mut Account::default(),
+                &mut Account::default(),
+            ],
+        );
+        check_error_code(result, ProgramError::Custom(8)).expect("Failed to get expected error")
+    }
+    #[test]
+    fn negative_test_set_staking_authority_signer() {
+        let mut pool_info = create_stake_pool_default();
+        let stake_balance: u64 = sol_to_lamports(10.0);
+
+        let stake_key = Pubkey::new_unique();
+        let mut stake_account = Account::new(stake_balance, STAKE_ACCOUNT_LEN, &stake_program_id());
+        let new_authorithy_key = Pubkey::new_unique();
+        let mut new_authorithy_account =
+            Account::new(stake_balance, STAKE_ACCOUNT_LEN, &stake_program_id());
+
+        let result = do_process_instruction(
+            set_staking_authority_without_signer(
+                &STAKE_POOL_PROGRAM_ID,
+                &pool_info.pool_key,
+                &Pubkey::new_unique(),
+                &pool_info.withdraw_authority_key,
+                &stake_key,
+                &new_authorithy_key,
+                &stake_program_id(),
+            )
+            .unwrap(),
+            vec![
+                &mut pool_info.pool_account,
+                &mut pool_info.owner_fee_account,
+                &mut Account::default(),
+                &mut stake_account,
+                &mut new_authorithy_account,
+                &mut Account::default(),
+                &mut Account::default(),
+            ],
+        );
+        check_error_code(result, ProgramError::Custom(8)).expect("Failed to get expected error")
     }
 
     #[test]
@@ -1275,5 +1676,67 @@ mod tests {
         assert!(
             matches!(state, State::Init(stake_pool) if stake_pool.owner == new_owner_key && stake_pool.owner_fee_account == new_owner_fee.key)
         );
+    }
+    #[test]
+    fn negative_test_set_owner_owner() {
+        let mut pool_info = create_stake_pool_default();
+
+        let new_owner_key = Pubkey::new_unique();
+        let mut new_owner_account = Account::default();
+
+        let mut new_owner_fee = create_token_account(
+            &TOKEN_PROGRAM_ID,
+            &pool_info.mint_key,
+            &mut pool_info.mint_account,
+        );
+
+        let result = do_process_instruction(
+            set_owner(
+                &STAKE_POOL_PROGRAM_ID,
+                &pool_info.pool_key,
+                &Pubkey::new_unique(),
+                &new_owner_key,
+                &new_owner_fee.key,
+            )
+            .unwrap(),
+            vec![
+                &mut pool_info.pool_account,
+                &mut Account::default(),
+                &mut new_owner_account,
+                &mut new_owner_fee.account,
+            ],
+        );
+        check_error_code(result, ProgramError::Custom(8)).expect("Failed to get expected error")
+    }
+    #[test]
+    fn negative_test_set_owner_signer() {
+        let mut pool_info = create_stake_pool_default();
+
+        let new_owner_key = Pubkey::new_unique();
+        let mut new_owner_account = Account::default();
+
+        let mut new_owner_fee = create_token_account(
+            &TOKEN_PROGRAM_ID,
+            &pool_info.mint_key,
+            &mut pool_info.mint_account,
+        );
+
+        let result = do_process_instruction(
+            set_owner_without_signer(
+                &STAKE_POOL_PROGRAM_ID,
+                &pool_info.pool_key,
+                &pool_info.owner_key,
+                &new_owner_key,
+                &new_owner_fee.key,
+            )
+            .unwrap(),
+            vec![
+                &mut pool_info.pool_account,
+                &mut pool_info.owner_account,
+                &mut new_owner_account,
+                &mut new_owner_fee.account,
+            ],
+        );
+        check_error_code(result, ProgramError::Custom(8)).expect("Failed to get expected error")
     }
 }
