@@ -1281,17 +1281,17 @@ mod tests {
             &pool_info.mint_key,
             &mut pool_info.mint_account,
         );
-        let mut deposit_info = do_deposit(&mut pool_info, stake_balance, &mut pool_token_receiver);
+        let deposit_info = do_deposit(&mut pool_info, stake_balance, &mut pool_token_receiver);
 
         Withdraw {
-            stake_balance: stake_balance,
-            tokens_to_issue: tokens_to_issue,
-            withdraw_amount: withdraw_amount,
-            tokens_to_burn: tokens_to_burn,
-            pool_info: pool_info,
-            user_withdrawer_key: user_withdrawer_key,
-            pool_token_receiver: pool_token_receiver,
-            deposit_info: deposit_info,
+            stake_balance,
+            tokens_to_issue,
+            withdraw_amount,
+            tokens_to_burn,
+            pool_info,
+            user_withdrawer_key,
+            pool_token_receiver,
+            deposit_info,
         }
     }
     #[test]
@@ -1315,6 +1315,28 @@ mod tests {
         assert!(
             matches!(state, State::Init(stake_pool) if stake_pool.stake_total == test_data.stake_balance - test_data.withdraw_amount && stake_pool.pool_total == test_data.tokens_to_issue - test_data.tokens_to_burn)
         );
+    }
+    #[test]
+    fn negative_test_withdraw_wrong_withdraw_authority() {
+        let mut test_data = initialize_withdraw_test();
+
+        test_data.pool_info.withdraw_authority_key = Pubkey::new_unique();
+
+        let withdraw_info = do_withdraw(&mut test_data);
+
+        check_error_code(withdraw_info.result, ProgramError::Custom(1))
+            .expect("Failed to get expected error")
+    }
+    #[test]
+    fn negative_test_withdraw_all() {
+        //
+        let mut test_data = initialize_withdraw_test();
+
+        test_data.withdraw_amount = test_data.stake_balance;
+
+        let withdraw_info = do_withdraw(&mut test_data);
+        check_error_code(withdraw_info.result, ProgramError::Custom(1))
+            .expect("Failed to get expected error")
     }
     #[test]
     fn negative_test_withdraw_excess_amount() {
