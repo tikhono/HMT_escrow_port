@@ -331,7 +331,7 @@ impl Processor {
         let withdraw_info = next_account_info(account_info_iter)?;
         // Stake account to split
         let stake_split_from = next_account_info(account_info_iter)?;
-        // Unitialized stake account to receive withdrawal
+        // Uninitialized stake account to receive withdrawal
         let stake_split_to = next_account_info(account_info_iter)?;
         // User account to set as a new withdraw authority
         let user_stake_authority = next_account_info(account_info_iter)?;
@@ -1545,8 +1545,8 @@ mod tests {
 
         let stake_key = Pubkey::new_unique();
         let mut stake_account = Account::new(stake_balance, STAKE_ACCOUNT_LEN, &stake_program_id());
-        let new_authorithy_key = Pubkey::new_unique();
-        let mut new_authorithy_account =
+        let new_authority_key = Pubkey::new_unique();
+        let mut new_authority_account =
             Account::new(stake_balance, STAKE_ACCOUNT_LEN, &stake_program_id());
 
         let _result = do_process_instruction(
@@ -1556,7 +1556,7 @@ mod tests {
                 &pool_info.owner_key,
                 &pool_info.withdraw_authority_key,
                 &stake_key,
-                &new_authorithy_key,
+                &new_authority_key,
                 &stake_program_id(),
             )
             .unwrap(),
@@ -1565,7 +1565,7 @@ mod tests {
                 &mut pool_info.owner_fee_account,
                 &mut Account::default(),
                 &mut stake_account,
-                &mut new_authorithy_account,
+                &mut new_authority_account,
                 &mut Account::default(),
                 &mut Account::default(),
             ],
@@ -1579,8 +1579,8 @@ mod tests {
 
         let stake_key = Pubkey::new_unique();
         let mut stake_account = Account::new(stake_balance, STAKE_ACCOUNT_LEN, &stake_program_id());
-        let new_authorithy_key = Pubkey::new_unique();
-        let mut new_authorithy_account =
+        let new_authority_key = Pubkey::new_unique();
+        let mut new_authority_account =
             Account::new(stake_balance, STAKE_ACCOUNT_LEN, &stake_program_id());
 
         let result = do_process_instruction(
@@ -1590,7 +1590,7 @@ mod tests {
                 &Pubkey::new_unique(),
                 &pool_info.withdraw_authority_key,
                 &stake_key,
-                &new_authorithy_key,
+                &new_authority_key,
                 &stake_program_id(),
             )
             .unwrap(),
@@ -1599,7 +1599,7 @@ mod tests {
                 &mut Account::default(),
                 &mut Account::default(),
                 &mut stake_account,
-                &mut new_authorithy_account,
+                &mut new_authority_account,
                 &mut Account::default(),
                 &mut Account::default(),
             ],
@@ -1613,8 +1613,8 @@ mod tests {
 
         let stake_key = Pubkey::new_unique();
         let mut stake_account = Account::new(stake_balance, STAKE_ACCOUNT_LEN, &stake_program_id());
-        let new_authorithy_key = Pubkey::new_unique();
-        let mut new_authorithy_account =
+        let new_authority_key = Pubkey::new_unique();
+        let mut new_authority_account =
             Account::new(stake_balance, STAKE_ACCOUNT_LEN, &stake_program_id());
 
         let result = do_process_instruction(
@@ -1624,7 +1624,7 @@ mod tests {
                 &Pubkey::new_unique(),
                 &pool_info.withdraw_authority_key,
                 &stake_key,
-                &new_authorithy_key,
+                &new_authority_key,
                 &stake_program_id(),
             )
             .unwrap(),
@@ -1633,7 +1633,7 @@ mod tests {
                 &mut pool_info.owner_fee_account,
                 &mut Account::default(),
                 &mut stake_account,
-                &mut new_authorithy_account,
+                &mut new_authority_account,
                 &mut Account::default(),
                 &mut Account::default(),
             ],
