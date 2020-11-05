@@ -618,6 +618,7 @@ mod tests {
         processor::Processor as TokenProcessor,
         state::{Account as SplAccount, Mint as SplMint},
     };
+    use std::ffi::FromBytesWithNulError;
 
     /// Test program id for the stake-pool program.
     const STAKE_POOL_PROGRAM_ID: Pubkey = Pubkey::new_from_array([2u8; 32]);
@@ -717,6 +718,29 @@ mod tests {
         stake_account_account: Account,
     }
 
+    struct Deposit {
+        stake_balance: u64,
+        tokens_to_issue: u64,
+        user_token_balance: u64,
+        fee_token_balance: u64,
+        pool_info: StakePoolInfo,
+        pool_token_receiver: TokenInfo,
+    }
+
+    struct WithdrawInfo {
+        result: ProgramResult,
+    }
+
+    struct Withdraw {
+        stake_balance: u64,
+        tokens_to_issue: u64,
+        withdraw_amount: u64,
+        tokens_to_burn: u64,
+        pool_info: StakePoolInfo,
+        user_withdrawer_key: Pubkey,
+        pool_token_receiver: TokenInfo,
+        deposit_info: DepositInfo,
+    }
     fn do_process_instruction(
         instruction: Instruction,
         accounts: Vec<&mut Account>,
@@ -997,6 +1021,55 @@ mod tests {
         }
     }
 
+    fn do_withdraw(test_data: &mut Withdraw) -> WithdrawInfo {
+        approve_token(
+            &TOKEN_PROGRAM_ID,
+            &test_data.pool_token_receiver.key,
+            &mut test_data.pool_token_receiver.account,
+            &test_data.pool_info.withdraw_authority_key,
+            &test_data.pool_token_receiver.owner,
+            test_data.tokens_to_burn,
+        );
+
+        let stake_to_receive_key = Pubkey::new_unique();
+        let mut stake_to_receive_account = Account::new(
+            test_data.stake_balance,
+            STAKE_ACCOUNT_LEN,
+            &stake_program_id(),
+        );
+
+        let result = do_process_instruction(
+            withdraw(
+                &STAKE_POOL_PROGRAM_ID,
+                &test_data.pool_info.pool_key,
+                &test_data.pool_info.withdraw_authority_key,
+                &test_data.deposit_info.stake_account_key,
+                &stake_to_receive_key,
+                &test_data.user_withdrawer_key,
+                &test_data.pool_token_receiver.key,
+                &test_data.pool_info.mint_key,
+                &TOKEN_PROGRAM_ID,
+                &stake_program_id(),
+                test_data.withdraw_amount,
+            )
+            .unwrap(),
+            vec![
+                &mut test_data.pool_info.pool_account,
+                &mut Account::default(),
+                &mut test_data.deposit_info.stake_account_account,
+                &mut stake_to_receive_account,
+                &mut Account::default(),
+                &mut test_data.pool_token_receiver.account,
+                &mut test_data.pool_info.mint_account,
+                &mut Account::default(),
+                &mut Account::default(),
+                &mut Account::default(),
+            ],
+        );
+
+        WithdrawInfo { result }
+    }
+
     fn set_staking_authority_without_signer(
         program_id: &Pubkey,
         stake_pool: &Pubkey,
@@ -1054,8 +1127,10 @@ mod tests {
             Ok(_) => Err(()),
             Err(error) => {
                 if error == target_error {
+                    println!("Got: Ok");
                     Ok(())
                 } else {
+                    println!("Got: {:?}", error);
                     Err(())
                 }
             }
@@ -1084,15 +1159,6 @@ mod tests {
                 assert_eq!(stake_pool.pool_total, 0);
             }
         }
-    }
-
-    struct Deposit {
-        stake_balance: u64,
-        tokens_to_issue: u64,
-        user_token_balance: u64,
-        fee_token_balance: u64,
-        pool_info: StakePoolInfo,
-        pool_token_receiver: TokenInfo,
     }
 
     fn initialize_deposit_test() -> Deposit {
@@ -1185,15 +1251,30 @@ mod tests {
         check_error_code(deposit_info.result, ProgramError::Custom(1))
             .expect("Failed to get expected error")
     }
-
     #[test]
-    fn test_withdraw() {
+    fn negative_test_deposit_wrong_owner_fee_account() {
+        let mut test_data = initialize_deposit_test();
+        test_data.pool_info.owner_fee_account = Account::default();
+
+        let deposit_info = do_deposit(
+            &mut test_data.pool_info,
+            test_data.stake_balance,
+            &mut test_data.pool_token_receiver,
+        );
+
+        check_error_code(deposit_info.result, ProgramError::InvalidAccountData)
+            .expect("Failed to get expected error")
+    }
+
+    fn initialize_withdraw_test() -> Withdraw {
+        let stake_balance = 20_000_000_000;
+        let tokens_to_issue = 20_000_000_000;
+        let withdraw_amount = 5_000_000_000;
+        let tokens_to_burn = 5_000_000_000;
+
         let mut pool_info = create_stake_pool_default();
 
         let user_withdrawer_key = Pubkey::new_unique();
-
-        let stake_balance = 20_000_000_000;
-        let tokens_to_issue: u64 = 20_000_000_000;
 
         let mut pool_token_receiver = create_token_account(
             &TOKEN_PROGRAM_ID,
@@ -1202,127 +1283,49 @@ mod tests {
         );
         let mut deposit_info = do_deposit(&mut pool_info, stake_balance, &mut pool_token_receiver);
 
-        let withdraw_amount = 5_000_000_000;
-        let tokens_to_burn: u64 = 5_000_000_000;
+        Withdraw {
+            stake_balance: stake_balance,
+            tokens_to_issue: tokens_to_issue,
+            withdraw_amount: withdraw_amount,
+            tokens_to_burn: tokens_to_burn,
+            pool_info: pool_info,
+            user_withdrawer_key: user_withdrawer_key,
+            pool_token_receiver: pool_token_receiver,
+            deposit_info: deposit_info,
+        }
+    }
+    #[test]
+    fn test_withdraw() {
+        let mut test_data = initialize_withdraw_test();
+        let withdraw_info = do_withdraw(&mut test_data);
 
-        approve_token(
-            &TOKEN_PROGRAM_ID,
-            &pool_token_receiver.key,
-            &mut pool_token_receiver.account,
-            &pool_info.withdraw_authority_key,
-            &pool_token_receiver.owner,
-            tokens_to_burn,
-        );
+        withdraw_info.result.expect("Fail on deposit");
+        let fee_amount = test_data.stake_balance * FEE_DEFAULT.numerator / FEE_DEFAULT.denominator;
 
-        let stake_to_receive_key = Pubkey::new_unique();
-        let mut stake_to_receive_account =
-            Account::new(stake_balance, STAKE_ACCOUNT_LEN, &stake_program_id());
-
-        let _result = do_process_instruction(
-            withdraw(
-                &STAKE_POOL_PROGRAM_ID,
-                &pool_info.pool_key,
-                &pool_info.withdraw_authority_key,
-                &deposit_info.stake_account_key,
-                &stake_to_receive_key,
-                &user_withdrawer_key,
-                &pool_token_receiver.key,
-                &pool_info.mint_key,
-                &TOKEN_PROGRAM_ID,
-                &stake_program_id(),
-                withdraw_amount,
-            )
-            .unwrap(),
-            vec![
-                &mut pool_info.pool_account,
-                &mut Account::default(),
-                &mut deposit_info.stake_account_account,
-                &mut stake_to_receive_account,
-                &mut Account::default(),
-                &mut pool_token_receiver.account,
-                &mut pool_info.mint_account,
-                &mut Account::default(),
-                &mut Account::default(),
-                &mut Account::default(),
-            ],
-        )
-        .expect("Error on withdraw");
-
-        let fee_amount = stake_balance * FEE_DEFAULT.numerator / FEE_DEFAULT.denominator;
-
-        let user_token_state = SplAccount::unpack_from_slice(&pool_token_receiver.account.data)
-            .expect("User token account is not initialized after withdraw");
+        let user_token_state =
+            SplAccount::unpack_from_slice(&test_data.pool_token_receiver.account.data)
+                .expect("User token account is not initialized after withdraw");
         assert_eq!(
             user_token_state.amount,
-            stake_balance - fee_amount - withdraw_amount
+            test_data.stake_balance - fee_amount - test_data.withdraw_amount
         );
 
         // Check stake pool token amounts
-        let state = State::deserialize(&pool_info.pool_account.data).unwrap();
+        let state = State::deserialize(&test_data.pool_info.pool_account.data).unwrap();
         assert!(
-            matches!(state, State::Init(stake_pool) if stake_pool.stake_total == stake_balance - withdraw_amount && stake_pool.pool_total == tokens_to_issue - tokens_to_burn)
+            matches!(state, State::Init(stake_pool) if stake_pool.stake_total == test_data.stake_balance - test_data.withdraw_amount && stake_pool.pool_total == test_data.tokens_to_issue - test_data.tokens_to_burn)
         );
     }
     #[test]
     fn negative_test_withdraw_excess_amount() {
-        let mut pool_info = create_stake_pool_default();
+        let mut test_data = initialize_withdraw_test();
 
-        let user_withdrawer_key = Pubkey::new_unique();
+        test_data.withdraw_amount *= 2;
 
-        let stake_balance = 20_000_000_000;
+        let withdraw_info = do_withdraw(&mut test_data);
 
-        let mut pool_token_receiver = create_token_account(
-            &TOKEN_PROGRAM_ID,
-            &pool_info.mint_key,
-            &mut pool_info.mint_account,
-        );
-        let mut deposit_info = do_deposit(&mut pool_info, stake_balance, &mut pool_token_receiver);
-
-        let withdraw_amount = 5_000_000_000;
-        let tokens_to_burn: u64 = 5_000_000_000;
-
-        approve_token(
-            &TOKEN_PROGRAM_ID,
-            &pool_token_receiver.key,
-            &mut pool_token_receiver.account,
-            &pool_info.withdraw_authority_key,
-            &pool_token_receiver.owner,
-            tokens_to_burn,
-        );
-
-        let stake_to_receive_key = Pubkey::new_unique();
-        let mut stake_to_receive_account =
-            Account::new(stake_balance, STAKE_ACCOUNT_LEN, &stake_program_id());
-
-        let result = do_process_instruction(
-            withdraw(
-                &STAKE_POOL_PROGRAM_ID,
-                &pool_info.pool_key,
-                &pool_info.withdraw_authority_key,
-                &deposit_info.stake_account_key,
-                &stake_to_receive_key,
-                &user_withdrawer_key,
-                &pool_token_receiver.key,
-                &pool_info.mint_key,
-                &TOKEN_PROGRAM_ID,
-                &stake_program_id(),
-                withdraw_amount * 2,
-            )
-            .unwrap(),
-            vec![
-                &mut pool_info.pool_account,
-                &mut Account::default(),
-                &mut deposit_info.stake_account_account,
-                &mut stake_to_receive_account,
-                &mut Account::default(),
-                &mut pool_token_receiver.account,
-                &mut pool_info.mint_account,
-                &mut Account::default(),
-                &mut Account::default(),
-                &mut Account::default(),
-            ],
-        );
-        check_error_code(result, ProgramError::Custom(1)).expect("Failed to get expected error")
+        check_error_code(withdraw_info.result, ProgramError::Custom(1))
+            .expect("Failed to get expected error")
     }
 
     #[test]
