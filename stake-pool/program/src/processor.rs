@@ -609,8 +609,8 @@ mod tests {
     use super::*;
     use crate::instruction::*;
     use solana_program::{
-        instruction::AccountMeta, instruction::Instruction, native_token::sol_to_lamports,
-        program_pack::Pack, program_stubs, rent::Rent, sysvar,
+        instruction::AccountMeta, instruction::Instruction, program_pack::Pack, program_stubs,
+        rent::Rent, sysvar,
     };
     use solana_sdk::account::{create_account, create_is_signer_account_infos, Account};
     use spl_token::{
@@ -1091,7 +1091,7 @@ mod tests {
             denominator: 100,
             numerator: 2,
         };
-        let stake_balance: u64 = sol_to_lamports(10.0);
+        let stake_balance: u64 = 10_000_000_000;
         let tokens_to_issue: u64 = 10_000_000_000;
         let user_token_balance: u64 = 9_800_000_000;
         let fee_token_balance: u64 = 200_000_000;
@@ -1274,7 +1274,7 @@ mod tests {
 
         let user_withdrawer_key = Pubkey::new_unique();
 
-        let stake_balance = sol_to_lamports(20.0);
+        let stake_balance = 20_000_000_000;
 
         let mut pool_token_receiver = create_token_account(
             &TOKEN_PROGRAM_ID,
