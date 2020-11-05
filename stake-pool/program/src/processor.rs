@@ -1071,8 +1071,8 @@ mod tests {
             State::Init(stake_pool) => {
                 assert_eq!(stake_pool.deposit_bump_seed, pool_info.deposit_bump_seed);
                 assert_eq!(stake_pool.withdraw_bump_seed, pool_info.withdraw_bump_seed);
-                assert_eq!(stake_pool.fee.numerator, pool_info.fee.numerator);
-                assert_eq!(stake_pool.fee.denominator, pool_info.fee.denominator);
+                assert_eq!(stake_pool.fee.numerator, FEE_DEFAULT.numerator);
+                assert_eq!(stake_pool.fee.denominator, FEE_DEFAULT.denominator);
 
                 assert_eq!(stake_pool.owner, pool_info.owner_key);
                 assert_eq!(stake_pool.pool_mint, pool_info.mint_key);
@@ -1135,7 +1135,7 @@ mod tests {
 
         let user_withdrawer_key = Pubkey::new_unique();
 
-        let stake_balance = sol_to_lamports(20.0);
+        let stake_balance = 20_000_000_000;
         let tokens_to_issue: u64 = 20_000_000_000;
 
         let mut pool_token_receiver = create_token_account(
@@ -1145,7 +1145,7 @@ mod tests {
         );
         let mut deposit_info = do_deposit(&mut pool_info, stake_balance, &mut pool_token_receiver);
 
-        let withdraw_amount = sol_to_lamports(5.0);
+        let withdraw_amount = 5_000_000_000;
         let tokens_to_burn: u64 = 5_000_000_000;
 
         approve_token(
@@ -1191,7 +1191,7 @@ mod tests {
         )
         .expect("Error on withdraw");
 
-        let fee_amount = stake_balance * pool_info.fee.numerator / pool_info.fee.denominator;
+        let fee_amount = stake_balance * FEE_DEFAULT.numerator / FEE_DEFAULT.denominator;
 
         let user_token_state = SplAccount::unpack_from_slice(&pool_token_receiver.account.data)
             .expect("User token account is not initialized after withdraw");
@@ -1212,7 +1212,7 @@ mod tests {
 
         let user_withdrawer_key = Pubkey::new_unique();
 
-        let stake_balance = sol_to_lamports(20.0);
+        let stake_balance = 20_000_000_000;
 
         let mut pool_token_receiver = create_token_account(
             &TOKEN_PROGRAM_ID,
@@ -1221,7 +1221,7 @@ mod tests {
         );
         let mut deposit_info = do_deposit(&mut pool_info, stake_balance, &mut pool_token_receiver);
 
-        let withdraw_amount = sol_to_lamports(5.0);
+        let withdraw_amount = 5_000_000_000;
         let tokens_to_burn: u64 = 5_000_000_000;
 
         approve_token(
@@ -1284,9 +1284,9 @@ mod tests {
         let mut deposit_info = do_deposit(&mut pool_info, stake_balance, &mut pool_token_receiver);
 
         // Need to deposit more to cover deposit fee
-        let fee_amount = stake_balance * pool_info.fee.numerator / pool_info.fee.denominator;
-        let extra_deposit = (fee_amount * pool_info.fee.denominator)
-            / (pool_info.fee.denominator - pool_info.fee.numerator);
+        let fee_amount = stake_balance * FEE_DEFAULT.numerator / FEE_DEFAULT.denominator;
+        let extra_deposit = (fee_amount * FEE_DEFAULT.denominator)
+            / (FEE_DEFAULT.denominator - FEE_DEFAULT.numerator);
 
         let _extra_deposit_info =
             do_deposit(&mut pool_info, extra_deposit, &mut pool_token_receiver);
@@ -1339,7 +1339,7 @@ mod tests {
 
         let user_withdrawer_key = Pubkey::new_unique();
 
-        let stake_balance = sol_to_lamports(20.0);
+        let stake_balance = 20_000_000_000;
 
         let mut pool_token_receiver = create_token_account(
             &TOKEN_PROGRAM_ID,
@@ -1349,9 +1349,9 @@ mod tests {
         let mut deposit_info = do_deposit(&mut pool_info, stake_balance, &mut pool_token_receiver);
 
         // Need to deposit more to cover deposit fee
-        let fee_amount = stake_balance * pool_info.fee.numerator / pool_info.fee.denominator;
-        let extra_deposit = (fee_amount * pool_info.fee.denominator)
-            / (pool_info.fee.denominator - pool_info.fee.numerator);
+        let fee_amount = stake_balance * FEE_DEFAULT.numerator / FEE_DEFAULT.denominator;
+        let extra_deposit = (fee_amount * FEE_DEFAULT.denominator)
+            / (FEE_DEFAULT.denominator - FEE_DEFAULT.numerator);
 
         let _extra_deposit_info =
             do_deposit(&mut pool_info, extra_deposit, &mut pool_token_receiver);
@@ -1398,7 +1398,7 @@ mod tests {
 
         let user_withdrawer_key = Pubkey::new_unique();
 
-        let stake_balance = sol_to_lamports(20.0);
+        let stake_balance = 20_000_000_000;
 
         let mut pool_token_receiver = create_token_account(
             &TOKEN_PROGRAM_ID,
@@ -1408,9 +1408,9 @@ mod tests {
         let mut deposit_info = do_deposit(&mut pool_info, stake_balance, &mut pool_token_receiver);
 
         // Need to deposit more to cover deposit fee
-        let fee_amount = stake_balance * pool_info.fee.numerator / pool_info.fee.denominator;
-        let extra_deposit = (fee_amount * pool_info.fee.denominator)
-            / (pool_info.fee.denominator - pool_info.fee.numerator);
+        let fee_amount = stake_balance * FEE_DEFAULT.numerator / FEE_DEFAULT.denominator;
+        let extra_deposit = (fee_amount * FEE_DEFAULT.denominator)
+            / (FEE_DEFAULT.denominator - FEE_DEFAULT.numerator);
 
         let _extra_deposit_info =
             do_deposit(&mut pool_info, extra_deposit, &mut pool_token_receiver);
@@ -1457,7 +1457,7 @@ mod tests {
 
         let user_withdrawer_key = Pubkey::new_unique();
 
-        let stake_balance = sol_to_lamports(20.0);
+        let stake_balance = 20_000_000_000;
 
         let mut pool_token_receiver = create_token_account(
             &TOKEN_PROGRAM_ID,
@@ -1467,9 +1467,9 @@ mod tests {
         let mut deposit_info = do_deposit(&mut pool_info, stake_balance, &mut pool_token_receiver);
 
         // Need to deposit more to cover deposit fee
-        let fee_amount = stake_balance * pool_info.fee.numerator / pool_info.fee.denominator;
-        let extra_deposit = (fee_amount * pool_info.fee.denominator)
-            / (pool_info.fee.denominator - pool_info.fee.numerator);
+        let fee_amount = stake_balance * FEE_DEFAULT.numerator / FEE_DEFAULT.denominator;
+        let extra_deposit = (fee_amount * FEE_DEFAULT.denominator)
+            / (FEE_DEFAULT.denominator - FEE_DEFAULT.numerator);
 
         let _extra_deposit_info =
             do_deposit(&mut pool_info, extra_deposit, &mut pool_token_receiver);
@@ -1541,7 +1541,7 @@ mod tests {
     #[test]
     fn test_set_staking_authority() {
         let mut pool_info = create_stake_pool_default();
-        let stake_balance: u64 = sol_to_lamports(10.0);
+        let stake_balance = 10_000_000_000;
 
         let stake_key = Pubkey::new_unique();
         let mut stake_account = Account::new(stake_balance, STAKE_ACCOUNT_LEN, &stake_program_id());
@@ -1575,7 +1575,7 @@ mod tests {
     #[test]
     fn negative_test_set_staking_authority_owner() {
         let mut pool_info = create_stake_pool_default();
-        let stake_balance: u64 = sol_to_lamports(10.0);
+        let stake_balance = 10_000_000_000;
 
         let stake_key = Pubkey::new_unique();
         let mut stake_account = Account::new(stake_balance, STAKE_ACCOUNT_LEN, &stake_program_id());
@@ -1609,7 +1609,7 @@ mod tests {
     #[test]
     fn negative_test_set_staking_authority_signer() {
         let mut pool_info = create_stake_pool_default();
-        let stake_balance: u64 = sol_to_lamports(10.0);
+        let stake_balance = 10_000_000_000;
 
         let stake_key = Pubkey::new_unique();
         let mut stake_account = Account::new(stake_balance, STAKE_ACCOUNT_LEN, &stake_program_id());
