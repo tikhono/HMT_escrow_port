@@ -608,6 +608,7 @@ impl PrintProgramError for Error {
 mod tests {
     use super::*;
     use crate::instruction::*;
+    use solana_program::native_token::sol_to_lamports;
     use solana_program::{
         instruction::AccountMeta, instruction::Instruction, program_pack::Pack, program_stubs,
         rent::Rent, sysvar,
@@ -618,7 +619,6 @@ mod tests {
         processor::Processor as TokenProcessor,
         state::{Account as SplAccount, Mint as SplMint},
     };
-    use std::ffi::FromBytesWithNulError;
 
     /// Test program id for the stake-pool program.
     const STAKE_POOL_PROGRAM_ID: Pubkey = Pubkey::new_from_array([2u8; 32]);
@@ -1119,24 +1119,6 @@ mod tests {
         })
     }
 
-    fn check_error_code(
-        result: Result<(), ProgramError>,
-        target_error: ProgramError,
-    ) -> Result<(), ()> {
-        match result {
-            Ok(_) => Err(()),
-            Err(error) => {
-                if error == target_error {
-                    println!("Got: Ok");
-                    Ok(())
-                } else {
-                    println!("Got: {:?}", error);
-                    Err(())
-                }
-            }
-        }
-    }
-
     #[test]
     fn test_initialize() {
         let pool_info = create_stake_pool_default();
@@ -1162,7 +1144,7 @@ mod tests {
     }
 
     fn initialize_deposit_test() -> Deposit {
-        let stake_balance: u64 = 10_000_000_000;
+        let stake_balance: u64 = sol_to_lamports(10.0);
         let tokens_to_issue: u64 = 10_000_000_000;
         let user_token_balance: u64 = 9_800_000_000;
         let fee_token_balance: u64 = 200_000_000;
@@ -1233,9 +1215,10 @@ mod tests {
             test_data.stake_balance,
             &mut test_data.pool_token_receiver,
         );
-
-        check_error_code(deposit_info.result, ProgramError::Custom(1))
-            .expect("Failed to get expected error")
+        assert_eq!(
+            deposit_info.result,
+            Err(Error::InvalidProgramAddress.into())
+        );
     }
     #[test]
     fn negative_test_deposit_wrong_deposit_authority() {
@@ -1248,8 +1231,10 @@ mod tests {
             &mut test_data.pool_token_receiver,
         );
 
-        check_error_code(deposit_info.result, ProgramError::Custom(1))
-            .expect("Failed to get expected error")
+        assert_eq!(
+            deposit_info.result,
+            Err(Error::InvalidProgramAddress.into())
+        );
     }
     #[test]
     fn negative_test_deposit_wrong_owner_fee_account() {
@@ -1262,14 +1247,13 @@ mod tests {
             &mut test_data.pool_token_receiver,
         );
 
-        check_error_code(deposit_info.result, ProgramError::InvalidAccountData)
-            .expect("Failed to get expected error")
+        assert_eq!(deposit_info.result, Err(ProgramError::InvalidAccountData));
     }
 
     fn initialize_withdraw_test() -> Withdraw {
-        let stake_balance = 20_000_000_000;
+        let stake_balance = sol_to_lamports(20.0);
         let tokens_to_issue = 20_000_000_000;
-        let withdraw_amount = 5_000_000_000;
+        let withdraw_amount = sol_to_lamports(5.0);
         let tokens_to_burn = 5_000_000_000;
 
         let mut pool_info = create_stake_pool_default();
@@ -1324,8 +1308,10 @@ mod tests {
 
         let withdraw_info = do_withdraw(&mut test_data);
 
-        check_error_code(withdraw_info.result, ProgramError::Custom(1))
-            .expect("Failed to get expected error")
+        assert_eq!(
+            withdraw_info.result,
+            Err(Error::InvalidProgramAddress.into())
+        );
     }
     #[test]
     fn negative_test_withdraw_all() {
@@ -1335,8 +1321,11 @@ mod tests {
         test_data.withdraw_amount = test_data.stake_balance;
 
         let withdraw_info = do_withdraw(&mut test_data);
-        check_error_code(withdraw_info.result, ProgramError::Custom(1))
-            .expect("Failed to get expected error")
+
+        assert_eq!(
+            withdraw_info.result,
+            Err(Error::InvalidProgramAddress.into())
+        );
     }
     #[test]
     fn negative_test_withdraw_excess_amount() {
@@ -1346,8 +1335,10 @@ mod tests {
 
         let withdraw_info = do_withdraw(&mut test_data);
 
-        check_error_code(withdraw_info.result, ProgramError::Custom(1))
-            .expect("Failed to get expected error")
+        assert_eq!(
+            withdraw_info.result,
+            Err(Error::InvalidProgramAddress.into())
+        );
     }
 
     #[test]
@@ -1356,7 +1347,7 @@ mod tests {
 
         let user_withdrawer_key = Pubkey::new_unique();
 
-        let stake_balance = 20_000_000_000;
+        let stake_balance = sol_to_lamports(20.0);
 
         let mut pool_token_receiver = create_token_account(
             &TOKEN_PROGRAM_ID,
@@ -1421,7 +1412,7 @@ mod tests {
 
         let user_withdrawer_key = Pubkey::new_unique();
 
-        let stake_balance = 20_000_000_000;
+        let stake_balance = sol_to_lamports(20.0);
 
         let mut pool_token_receiver = create_token_account(
             &TOKEN_PROGRAM_ID,
@@ -1472,7 +1463,8 @@ mod tests {
                 &mut Account::default(),
             ],
         );
-        check_error_code(result, ProgramError::Custom(1)).expect("Failed to get expected error")
+
+        assert_eq!(result, Err(Error::InvalidProgramAddress.into()));
     }
     #[test]
     fn negative_test_claim_deposit_instead_of_withdraw() {
@@ -1480,7 +1472,7 @@ mod tests {
 
         let user_withdrawer_key = Pubkey::new_unique();
 
-        let stake_balance = 20_000_000_000;
+        let stake_balance = sol_to_lamports(20.0);
 
         let mut pool_token_receiver = create_token_account(
             &TOKEN_PROGRAM_ID,
@@ -1531,7 +1523,8 @@ mod tests {
                 &mut Account::default(),
             ],
         );
-        check_error_code(result, ProgramError::Custom(4)).expect("Failed to get expected error")
+
+        assert_eq!(result, Err(Error::ExpectedAccount.into()));
     }
     #[test]
     fn negative_test_claim_twice() {
@@ -1539,7 +1532,7 @@ mod tests {
 
         let user_withdrawer_key = Pubkey::new_unique();
 
-        let stake_balance = 20_000_000_000;
+        let stake_balance = sol_to_lamports(20.0);
 
         let mut pool_token_receiver = create_token_account(
             &TOKEN_PROGRAM_ID,
@@ -1617,13 +1610,14 @@ mod tests {
                 &mut Account::default(),
             ],
         );
-        check_error_code(result, ProgramError::Custom(1)).expect("Failed to get expected error")
+
+        assert_eq!(result, Err(Error::InvalidProgramAddress.into()));
     }
 
     #[test]
     fn test_set_staking_authority() {
         let mut pool_info = create_stake_pool_default();
-        let stake_balance = 10_000_000_000;
+        let stake_balance = sol_to_lamports(10.0);
 
         let stake_key = Pubkey::new_unique();
         let mut stake_account = Account::new(stake_balance, STAKE_ACCOUNT_LEN, &stake_program_id());
@@ -1657,7 +1651,7 @@ mod tests {
     #[test]
     fn negative_test_set_staking_authority_owner() {
         let mut pool_info = create_stake_pool_default();
-        let stake_balance = 10_000_000_000;
+        let stake_balance = sol_to_lamports(10.0);
 
         let stake_key = Pubkey::new_unique();
         let mut stake_account = Account::new(stake_balance, STAKE_ACCOUNT_LEN, &stake_program_id());
@@ -1686,12 +1680,13 @@ mod tests {
                 &mut Account::default(),
             ],
         );
-        check_error_code(result, ProgramError::Custom(8)).expect("Failed to get expected error")
+
+        assert_eq!(result, Err(Error::InvalidInput.into()));
     }
     #[test]
     fn negative_test_set_staking_authority_signer() {
         let mut pool_info = create_stake_pool_default();
-        let stake_balance = 10_000_000_000;
+        let stake_balance = sol_to_lamports(10.0);
 
         let stake_key = Pubkey::new_unique();
         let mut stake_account = Account::new(stake_balance, STAKE_ACCOUNT_LEN, &stake_program_id());
@@ -1720,7 +1715,7 @@ mod tests {
                 &mut Account::default(),
             ],
         );
-        check_error_code(result, ProgramError::Custom(8)).expect("Failed to get expected error")
+        assert_eq!(result, Err(Error::InvalidInput.into()));
     }
 
     #[test]
@@ -1788,7 +1783,8 @@ mod tests {
                 &mut new_owner_fee.account,
             ],
         );
-        check_error_code(result, ProgramError::Custom(8)).expect("Failed to get expected error")
+
+        assert_eq!(result, Err(Error::InvalidInput.into()));
     }
     #[test]
     fn negative_test_set_owner_signer() {
@@ -1819,6 +1815,7 @@ mod tests {
                 &mut new_owner_fee.account,
             ],
         );
-        check_error_code(result, ProgramError::Custom(8)).expect("Failed to get expected error")
+
+        assert_eq!(result, Err(Error::InvalidInput.into()));
     }
 }
