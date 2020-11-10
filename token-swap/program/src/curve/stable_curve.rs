@@ -383,8 +383,8 @@ mod tests {
             .swap(source_amount, swap_source_amount, swap_destination_amount)
             .unwrap();
         assert_eq!(result.new_source_amount, 1100);
-        assert_eq!(result.amount_swapped, 2081);
-        assert_eq!(result.new_destination_amount, 47919);
+        assert_eq!(result.amount_swapped, 2083);
+        assert_eq!(result.new_destination_amount, 47917);
     }
 
     #[test]
