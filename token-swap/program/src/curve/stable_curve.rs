@@ -42,6 +42,8 @@ fn compute_d(amp: u128, amount_a: u128, amount_b: u128) -> Option<u128> {
     // XXX: Curve uses u256
     // TODO: Handle overflows
     let n_coins: u128 = 2; // n
+    let amount_a_times_coins = amount_a.checked_mul(n_coins)?;
+    let amount_b_times_coins = amount_b.checked_mul(n_coins)?;
     let sum_x = amount_a.checked_add(amount_b)?; // sum(x_i), a.k.a S
     if sum_x == 0 {
         Some(0)
@@ -52,8 +54,8 @@ fn compute_d(amp: u128, amount_a: u128, amount_b: u128) -> Option<u128> {
                                                   // Newton's method to approximate D
         for _ in 0..128 {
             let mut d_p = d;
-            d_p = d_p.checked_mul(d.checked_div(amount_a.checked_mul(n_coins)?)?)?;
-            d_p = d_p.checked_mul(d.checked_div(amount_b.checked_mul(n_coins)?)?)?;
+            d_p = d_p.checked_mul(d)?.checked_div(amount_a_times_coins)?;
+            d_p = d_p.checked_mul(d)?.checked_div(amount_b_times_coins)?;
             d_prev = d;
             d = (leverage * sum_x + d_p * n_coins) * d / ((leverage - 1) * d + (n_coins + 1) * d_p);
             // Equality with the precision of 1
@@ -132,8 +134,8 @@ impl CurveCalculator for StableCurve {
             new_source_amount,
             new_destination_amount,
             amount_swapped,
-            trade_fee: 1,
-            owner_fee: 1000,
+            trade_fee: dy_fee,
+            owner_fee,
         })
     }
 
@@ -301,8 +303,8 @@ mod tests {
 
     #[test]
     fn stable_swap_calculation_trade_fee() {
-        let swap_source_amount = 50_000_000_000;
-        let swap_destination_amount = 50_000_000_000;
+        let swap_source_amount = 1_000;
+        let swap_destination_amount = 50_000;
         let trade_fee_numerator = 1;
         let trade_fee_denominator = 1000;
         let owner_trade_fee_numerator = 0;
@@ -311,7 +313,7 @@ mod tests {
         let owner_withdraw_fee_denominator = 0;
         let host_fee_numerator = 0;
         let host_fee_denominator = 0;
-        let source_amount = 10_000_000_000;
+        let source_amount = 100;
         let amp = 1;
         let curve = StableCurve {
             trade_fee_numerator,
@@ -371,9 +373,9 @@ mod tests {
 
     #[test]
     fn constant_product_swap_no_fee() {
+        let source_amount: u128 = 100;
         let swap_source_amount: u128 = 1000;
         let swap_destination_amount: u128 = 50000;
-        let source_amount: u128 = 100;
         let curve = StableCurve::default();
         let result = curve
             .swap(source_amount, swap_source_amount, swap_destination_amount)
