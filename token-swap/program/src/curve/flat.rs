@@ -39,16 +39,8 @@ impl CurveCalculator for FlatCurve {
         swap_destination_amount: u128,
     ) -> Option<SwapResult> {
         // debit the fee to calculate the amount swapped
-        let trade_fee = calculate_fee(
-            source_amount,
-            u128::try_from(self.trade_fee_numerator).ok()?,
-            u128::try_from(self.trade_fee_denominator).ok()?,
-        )?;
-        let owner_fee = calculate_fee(
-            source_amount,
-            u128::try_from(self.owner_trade_fee_numerator).ok()?,
-            u128::try_from(self.owner_trade_fee_denominator).ok()?,
-        )?;
+        let trade_fee = self.trading_fee(source_amount)?;
+        let owner_fee = self.owner_trading_fee(source_amount)?;
 
         let amount_swapped = source_amount
             .checked_sub(trade_fee)?
@@ -64,6 +56,24 @@ impl CurveCalculator for FlatCurve {
             trade_fee,
             owner_fee,
         })
+    }
+
+    /// Calculate the trading fee in trading tokens
+    fn trading_fee(&self, trading_tokens: u128) -> Option<u128> {
+        calculate_fee(
+            trading_tokens,
+            u128::try_from(self.trade_fee_numerator).ok()?,
+            u128::try_from(self.trade_fee_denominator).ok()?,
+        )
+    }
+
+    /// Calculate the owner trading fee in trading tokens
+    fn owner_trading_fee(&self, trading_tokens: u128) -> Option<u128> {
+        calculate_fee(
+            trading_tokens,
+            u128::try_from(self.owner_trade_fee_numerator).ok()?,
+            u128::try_from(self.owner_trade_fee_denominator).ok()?,
+        )
     }
 
     /// Calculate the withdraw fee in pool tokens

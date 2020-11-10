@@ -78,15 +78,14 @@ fn compute_y(x: u128, d: u128) -> Option<u128> {
     // XXX: Curve uses u256
     // TODO: Handle overflows
     let n_coins: u128 = 2;
-    let n2_coins = n_coins.checked_mul(n_coins)?;
     let leverage = AMP_FACTOR.checked_mul(n_coins)?; // A * n
-    let d_cube = d.checked_pow(3)?;
 
     // sum' = prod' = x
     // c =  D ** (n + 1) / (n ** (2 * n) * prod' * A)
-    let c = d_cube / (x * n2_coins * leverage);
+    let c = checked_pow(d, 3)?
+        .checked_div(x.checked_mul(checked_pow(n_coins, 2)?.checked_mul(leverage)?)?)?;
     // b = sum' - (A*n**n - 1) * D / (A * n**n)
-    let b = x + d / leverage; // d is subtracted on line 82
+    let b = x.checked_add(d.checked_div(leverage)?)?; // d is subtracted on line 82
 
     // Solve for y by approximating: y**2 + b*y = c
     let mut y_prev: u128;
@@ -114,13 +113,28 @@ impl CurveCalculator for StableCurve {
         swap_destination_amount: u128,
     ) -> Option<SwapResult> {
         let y = compute_y(
-            swap_source_amount + source_amount,
+            swap_source_amount.checked_add(source_amount)?,
             compute_d(swap_source_amount, swap_destination_amount),
         )?;
         let dy = swap_destination_amount.checked_sub(y)?;
-        let dy_fee = dy.checked_mul(1)?.checked_div(1000)?;
+        let dy_fee = calculate_fee(
+            dy,
+            u128::try_from(self.trade_fee_numerator).ok()?,
+            u128::try_from(self.trade_fee_denominator).ok()?,
+        )?;
 
-        let amount_swapped = dy - dy_fee;
+        let trade_fee = calculate_fee(
+            source_amount,
+            u128::try_from(self.trade_fee_numerator).ok()?,
+            u128::try_from(self.trade_fee_denominator).ok()?,
+        )?;
+        let owner_fee = calculate_fee(
+            source_amount,
+            u128::try_from(self.owner_trade_fee_numerator).ok()?,
+            u128::try_from(self.owner_trade_fee_denominator).ok()?,
+        )?;
+
+        let amount_swapped = dy.checked_sub(dy_fee)?;
         let new_destination_amount = swap_destination_amount.checked_sub(amount_swapped)?;
         let new_source_amount = swap_source_amount.checked_add(source_amount)?;
         Some(SwapResult {
@@ -346,10 +360,10 @@ mod tests {
             .swap(source_amount, swap_source_amount, swap_destination_amount)
             .unwrap();
         assert_eq!(result.new_source_amount, 1100);
-        assert_eq!(result.amount_swapped, 97);
-        assert_eq!(result.new_destination_amount, swap_destination_amount - 97);
+        assert_eq!(result.amount_swapped, 2081);
+        assert_eq!(result.new_destination_amount, 47919);
         assert_eq!(result.trade_fee, 1);
-        assert_eq!(result.owner_fee, 2);
+        assert_eq!(result.owner_fee, 1000);
     }
 
     #[test]
@@ -361,9 +375,9 @@ mod tests {
         let result = curve
             .swap(source_amount, swap_source_amount, swap_destination_amount)
             .unwrap();
-        assert_eq!(result.new_source_amount, 1103);
-        assert_eq!(result.amount_swapped, 103);
-        assert_eq!(result.new_destination_amount, 49897);
+        assert_eq!(result.new_source_amount, 1100);
+        assert_eq!(result.amount_swapped, 2081);
+        assert_eq!(result.new_destination_amount, 47919);
     }
 
     #[test]

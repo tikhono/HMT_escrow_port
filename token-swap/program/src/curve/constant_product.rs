@@ -42,12 +42,7 @@ impl CurveCalculator for ConstantProductCurve {
     ) -> Option<SwapResult> {
         // debit the fee to calculate the amount swapped
         let trade_fee = self.trading_fee(source_amount)?;
-        // maybe calculate trade_fee like owner_fee?
-        let owner_fee = calculate_fee(
-            source_amount,
-            u128::try_from(self.owner_trade_fee_numerator).ok()?,
-            u128::try_from(self.owner_trade_fee_denominator).ok()?,
-        )?;
+        let owner_fee = self.owner_trading_fee(source_amount)?;
 
         let invariant = swap_source_amount.checked_mul(swap_destination_amount)?;
         let new_source_amount_less_fee = swap_source_amount
@@ -84,6 +79,15 @@ impl CurveCalculator for ConstantProductCurve {
             trading_tokens,
             u128::try_from(self.trade_fee_numerator).ok()?,
             u128::try_from(self.trade_fee_denominator).ok()?,
+        )
+    }
+
+    /// Calculate the owner trading fee in trading tokens
+    fn owner_trading_fee(&self, trading_tokens: u128) -> Option<u128> {
+        calculate_fee(
+            trading_tokens,
+            u128::try_from(self.owner_trade_fee_numerator).ok()?,
+            u128::try_from(self.owner_trade_fee_denominator).ok()?,
         )
     }
 
