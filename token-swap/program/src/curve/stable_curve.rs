@@ -31,42 +31,42 @@ pub struct StableCurve {
     pub host_fee_numerator: u64,
     /// Host trading fee denominator
     pub host_fee_denominator: u64,
+    /// Amplifier constant
+    pub amp: u64,
 }
-
-const AMP_FACTOR: u128 = 1;
 
 /// Compute stable swap invariant (D)
 /// Equation:
 /// A * sum(x_i) * n**n + D = A * D * n**n + D**(n+1) / (n**n * prod(x_i))
-fn compute_d(amount_a: u128, amount_b: u128) -> u128 {
+fn compute_d(amp: u128, amount_a: u128, amount_b: u128) -> Option<u128> {
     // XXX: Curve uses u256
     // TODO: Handle overflows
     let n_coins: u128 = 2; // n
-    let sum_x = amount_a + amount_b; // sum(x_i), a.k.a S
+    let sum_x = amount_a.checked_add(amount_b)?; // sum(x_i), a.k.a S
     if sum_x == 0 {
-        0
+        Some(0)
     } else {
         let mut d_prev: u128;
         let mut d = sum_x;
-        let leverage = AMP_FACTOR * n_coins; // A * n
-                                             // Newton's method to approximate D
+        let leverage = amp.checked_mul(n_coins)?; // A * n
+                                                  // Newton's method to approximate D
         for _ in 0..128 {
             let mut d_p = d;
-            d_p = d_p * d / (amount_a * n_coins);
-            d_p = d_p * d / (amount_b * n_coins);
+            d_p = d_p.checked_mul(d.checked_div(amount_a.checked_mul(n_coins)?)?)?;
+            d_p = d_p.checked_mul(d.checked_div(amount_b.checked_mul(n_coins)?)?)?;
             d_prev = d;
             d = (leverage * sum_x + d_p * n_coins) * d / ((leverage - 1) * d + (n_coins + 1) * d_p);
             // Equality with the precision of 1
             if d > d_p {
-                if d - d_prev <= 1 {
+                if d.checked_sub(d_prev)? <= 1 {
                     break;
                 }
-            } else if d_prev - d <= 1 {
+            } else if d_prev.checked_sub(d)? <= 1 {
                 break;
             }
         }
 
-        d
+        Some(d)
     }
 }
 
@@ -74,11 +74,11 @@ fn compute_d(amount_a: u128, amount_b: u128) -> u128 {
 /// Solve for y:
 /// y**2 + y * (sum' - (A*n**n - 1) * D / (A * n**n)) = D ** (n + 1) / (n ** (2 * n) * prod' * A)
 /// y**2 + b*y = c
-fn compute_y(x: u128, d: u128) -> Option<u128> {
+fn compute_y(amp: u128, x: u128, d: u128) -> Option<u128> {
     // XXX: Curve uses u256
     // TODO: Handle overflows
     let n_coins: u128 = 2;
-    let leverage = AMP_FACTOR.checked_mul(n_coins)?; // A * n
+    let leverage = amp.checked_mul(n_coins)?; // A * n
 
     // sum' = prod' = x
     // c =  D ** (n + 1) / (n ** (2 * n) * prod' * A)
@@ -94,10 +94,10 @@ fn compute_y(x: u128, d: u128) -> Option<u128> {
         y_prev = y;
         y = (y * y + c) / (2 * y + b - d);
         if y > y_prev {
-            if y - y_prev <= 1 {
+            if y.checked_sub(y_prev)? <= 1 {
                 break;
             }
-        } else if y_prev - y <= 1 {
+        } else if y_prev.checked_sub(y)? <= 1 {
             break;
         }
     }
@@ -113,26 +113,17 @@ impl CurveCalculator for StableCurve {
         swap_destination_amount: u128,
     ) -> Option<SwapResult> {
         let y = compute_y(
+            self.amp as u128,
             swap_source_amount.checked_add(source_amount)?,
-            compute_d(swap_source_amount, swap_destination_amount),
+            compute_d(
+                self.amp as u128,
+                swap_source_amount,
+                swap_destination_amount,
+            )?,
         )?;
         let dy = swap_destination_amount.checked_sub(y)?;
-        let dy_fee = calculate_fee(
-            dy,
-            u128::try_from(self.trade_fee_numerator).ok()?,
-            u128::try_from(self.trade_fee_denominator).ok()?,
-        )?;
-
-        let trade_fee = calculate_fee(
-            source_amount,
-            u128::try_from(self.trade_fee_numerator).ok()?,
-            u128::try_from(self.trade_fee_denominator).ok()?,
-        )?;
-        let owner_fee = calculate_fee(
-            source_amount,
-            u128::try_from(self.owner_trade_fee_numerator).ok()?,
-            u128::try_from(self.owner_trade_fee_denominator).ok()?,
-        )?;
+        let dy_fee = self.trading_fee(y)?;
+        let owner_fee = self.owner_trading_fee(source_amount)?;
 
         let amount_swapped = dy.checked_sub(dy_fee)?;
         let new_destination_amount = swap_destination_amount.checked_sub(amount_swapped)?;
@@ -183,13 +174,13 @@ impl IsInitialized for StableCurve {
 }
 impl Sealed for StableCurve {}
 impl Pack for StableCurve {
-    const LEN: usize = 64;
+    const LEN: usize = 72;
     fn pack_into_slice(&self, output: &mut [u8]) {
         (self as &dyn DynPack).pack_into_slice(output);
     }
 
     fn unpack_from_slice(input: &[u8]) -> Result<StableCurve, ProgramError> {
-        let input = array_ref![input, 0, 64];
+        let input = array_ref![input, 0, 72];
         #[allow(clippy::ptr_offset_with_cast)]
         let (
             trade_fee_numerator,
@@ -200,7 +191,8 @@ impl Pack for StableCurve {
             owner_withdraw_fee_denominator,
             host_fee_numerator,
             host_fee_denominator,
-        ) = array_refs![input, 8, 8, 8, 8, 8, 8, 8, 8];
+            amp,
+        ) = array_refs![input, 8, 8, 8, 8, 8, 8, 8, 8, 8];
         Ok(Self {
             trade_fee_numerator: u64::from_le_bytes(*trade_fee_numerator),
             trade_fee_denominator: u64::from_le_bytes(*trade_fee_denominator),
@@ -210,13 +202,14 @@ impl Pack for StableCurve {
             owner_withdraw_fee_denominator: u64::from_le_bytes(*owner_withdraw_fee_denominator),
             host_fee_numerator: u64::from_le_bytes(*host_fee_numerator),
             host_fee_denominator: u64::from_le_bytes(*host_fee_denominator),
+            amp: u64::from_le_bytes(*amp),
         })
     }
 }
 
 impl DynPack for StableCurve {
     fn pack_into_slice(&self, output: &mut [u8]) {
-        let output = array_mut_ref![output, 0, 64];
+        let output = array_mut_ref![output, 0, 72];
         let (
             trade_fee_numerator,
             trade_fee_denominator,
@@ -226,7 +219,8 @@ impl DynPack for StableCurve {
             owner_withdraw_fee_denominator,
             host_fee_numerator,
             host_fee_denominator,
-        ) = mut_array_refs![output, 8, 8, 8, 8, 8, 8, 8, 8];
+            amp,
+        ) = mut_array_refs![output, 8, 8, 8, 8, 8, 8, 8, 8, 8];
         *trade_fee_numerator = self.trade_fee_numerator.to_le_bytes();
         *trade_fee_denominator = self.trade_fee_denominator.to_le_bytes();
         *owner_trade_fee_numerator = self.owner_trade_fee_numerator.to_le_bytes();
@@ -235,6 +229,7 @@ impl DynPack for StableCurve {
         *owner_withdraw_fee_denominator = self.owner_withdraw_fee_denominator.to_le_bytes();
         *host_fee_numerator = self.host_fee_numerator.to_le_bytes();
         *host_fee_denominator = self.host_fee_denominator.to_le_bytes();
+        *amp = self.amp.to_le_bytes();
     }
 }
 
@@ -253,6 +248,7 @@ mod tests {
         let owner_withdraw_fee_denominator = 1;
         let host_fee_numerator = 0;
         let host_fee_denominator = 1;
+        let amp = 1;
         let calculator = StableCurve {
             trade_fee_numerator,
             trade_fee_denominator,
@@ -262,6 +258,7 @@ mod tests {
             owner_withdraw_fee_denominator,
             host_fee_numerator,
             host_fee_denominator,
+            amp,
         };
         assert_eq!(calculator.new_pool_supply(), INITIAL_SWAP_POOL_AMOUNT);
     }
@@ -275,6 +272,7 @@ mod tests {
         let owner_withdraw_fee_denominator = 1;
         let host_fee_numerator = 0;
         let host_fee_denominator = 1;
+        let amp = 1;
         let calculator = StableCurve {
             trade_fee_numerator,
             trade_fee_denominator,
@@ -284,6 +282,7 @@ mod tests {
             owner_withdraw_fee_denominator,
             host_fee_numerator,
             host_fee_denominator,
+            amp,
         };
         assert_eq!(
             calculator.pool_tokens_to_trading_tokens(deposit, supply, token_a),
@@ -313,6 +312,7 @@ mod tests {
         let host_fee_numerator = 0;
         let host_fee_denominator = 0;
         let source_amount = 10_000_000_000;
+        let amp = 1;
         let curve = StableCurve {
             trade_fee_numerator,
             trade_fee_denominator,
@@ -322,6 +322,7 @@ mod tests {
             owner_withdraw_fee_denominator,
             host_fee_numerator,
             host_fee_denominator,
+            amp,
         };
         let result = curve
             .swap(source_amount, swap_source_amount, swap_destination_amount)
@@ -346,6 +347,7 @@ mod tests {
         let host_fee_numerator = 2;
         let host_fee_denominator = 100;
         let source_amount: u128 = 100;
+        let amp = 1;
         let curve = StableCurve {
             trade_fee_numerator,
             trade_fee_denominator,
@@ -355,6 +357,7 @@ mod tests {
             owner_withdraw_fee_denominator,
             host_fee_numerator,
             host_fee_denominator,
+            amp,
         };
         let result = curve
             .swap(source_amount, swap_source_amount, swap_destination_amount)
@@ -390,6 +393,7 @@ mod tests {
         let owner_withdraw_fee_denominator = 10;
         let host_fee_numerator = 4;
         let host_fee_denominator = 10;
+        let amp = 1;
         let curve = StableCurve {
             trade_fee_numerator,
             trade_fee_denominator,
@@ -399,6 +403,7 @@ mod tests {
             owner_withdraw_fee_denominator,
             host_fee_numerator,
             host_fee_denominator,
+            amp,
         };
 
         let mut packed = [0u8; StableCurve::LEN];
@@ -415,6 +420,7 @@ mod tests {
         packed.extend_from_slice(&owner_withdraw_fee_denominator.to_le_bytes());
         packed.extend_from_slice(&host_fee_numerator.to_le_bytes());
         packed.extend_from_slice(&host_fee_denominator.to_le_bytes());
+        packed.extend_from_slice(&amp.to_le_bytes());
         let unpacked = StableCurve::unpack(&packed).unwrap();
         assert_eq!(curve, unpacked);
     }

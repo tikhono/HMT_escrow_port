@@ -58,6 +58,15 @@ impl CurveCalculator for FlatCurve {
         })
     }
 
+    /// Calculate the withdraw fee in pool tokens
+    fn owner_withdraw_fee(&self, pool_tokens: u128) -> Option<u128> {
+        calculate_fee(
+            pool_tokens,
+            u128::try_from(self.owner_withdraw_fee_numerator).ok()?,
+            u128::try_from(self.owner_withdraw_fee_denominator).ok()?,
+        )
+    }
+
     /// Calculate the trading fee in trading tokens
     fn trading_fee(&self, trading_tokens: u128) -> Option<u128> {
         calculate_fee(
@@ -73,15 +82,6 @@ impl CurveCalculator for FlatCurve {
             trading_tokens,
             u128::try_from(self.owner_trade_fee_numerator).ok()?,
             u128::try_from(self.owner_trade_fee_denominator).ok()?,
-        )
-    }
-
-    /// Calculate the withdraw fee in pool tokens
-    fn owner_withdraw_fee(&self, pool_tokens: u128) -> Option<u128> {
-        calculate_fee(
-            pool_tokens,
-            u128::try_from(self.owner_withdraw_fee_numerator).ok()?,
-            u128::try_from(self.owner_withdraw_fee_denominator).ok()?,
         )
     }
 

@@ -111,6 +111,10 @@ impl IsInitialized for ConstantProductCurve {
 impl Sealed for ConstantProductCurve {}
 impl Pack for ConstantProductCurve {
     const LEN: usize = 64;
+    fn pack_into_slice(&self, output: &mut [u8]) {
+        (self as &dyn DynPack).pack_into_slice(output);
+    }
+
     fn unpack_from_slice(input: &[u8]) -> Result<ConstantProductCurve, ProgramError> {
         let input = array_ref![input, 0, 64];
         #[allow(clippy::ptr_offset_with_cast)]
@@ -134,10 +138,6 @@ impl Pack for ConstantProductCurve {
             host_fee_numerator: u64::from_le_bytes(*host_fee_numerator),
             host_fee_denominator: u64::from_le_bytes(*host_fee_denominator),
         })
-    }
-
-    fn pack_into_slice(&self, output: &mut [u8]) {
-        (self as &dyn DynPack).pack_into_slice(output);
     }
 }
 
