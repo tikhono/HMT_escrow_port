@@ -40,7 +40,6 @@ pub struct StableCurve {
 /// A * sum(x_i) * n**n + D = A * D * n**n + D**(n+1) / (n**n * prod(x_i))
 fn compute_d(amp: u128, amount_a: u128, amount_b: u128) -> Option<u128> {
     // XXX: Curve uses u256
-    // TODO: Handle overflows
     let n_coins: u128 = 2; // n
     let amount_a_times_coins = amount_a.checked_mul(n_coins)?;
     let amount_b_times_coins = amount_b.checked_mul(n_coins)?;
@@ -94,7 +93,8 @@ fn compute_y(amp: u128, x: u128, d: u128) -> Option<u128> {
     let mut y = d;
     for _ in 0..128 {
         y_prev = y;
-        y = (y * y + c) / (2 * y + b - d);
+        y = (checked_pow(y, 2)?.checked_add(c)?)
+            .checked_div(y.checked_mul(2)?.checked_add(b)?.checked_sub(d)?)?;
         if y > y_prev {
             if y.checked_sub(y_prev)? <= 1 {
                 break;
@@ -124,7 +124,7 @@ impl CurveCalculator for StableCurve {
             )?,
         )?;
         let dy = swap_destination_amount.checked_sub(y)?;
-        let dy_fee = self.trading_fee(y)?;
+        let dy_fee = self.trading_fee(dy)?;
         let owner_fee = self.owner_trading_fee(source_amount)?;
 
         let amount_swapped = dy.checked_sub(dy_fee)?;
@@ -329,11 +329,11 @@ mod tests {
         let result = curve
             .swap(source_amount, swap_source_amount, swap_destination_amount)
             .unwrap();
-        assert_eq!(result.new_source_amount, 60_000_000_000);
-        assert_eq!(result.amount_swapped, 9_074_325_546);
-        assert_eq!(result.new_destination_amount, 40_925_674_454);
-        assert_eq!(result.trade_fee, 1);
-        assert_eq!(result.owner_fee, 1000);
+        assert_eq!(result.new_source_amount, 1_100);
+        assert_eq!(result.amount_swapped, 2_081);
+        assert_eq!(result.new_destination_amount, 47_919);
+        assert_eq!(result.trade_fee, 2);
+        assert_eq!(result.owner_fee, 0);
     }
 
     #[test]
@@ -365,7 +365,7 @@ mod tests {
             .swap(source_amount, swap_source_amount, swap_destination_amount)
             .unwrap();
         assert_eq!(result.new_source_amount, 1100);
-        assert_eq!(result.amount_swapped, 2081);
+        assert_eq!(result.amount_swapped, 2063);
         assert_eq!(result.new_destination_amount, 47919);
         assert_eq!(result.trade_fee, 1);
         assert_eq!(result.owner_fee, 1000);
@@ -376,7 +376,9 @@ mod tests {
         let source_amount: u128 = 100;
         let swap_source_amount: u128 = 1000;
         let swap_destination_amount: u128 = 50000;
-        let curve = StableCurve::default();
+        let mut curve = StableCurve::default();
+        curve.amp = 1;
+
         let result = curve
             .swap(source_amount, swap_source_amount, swap_destination_amount)
             .unwrap();
