@@ -5,6 +5,7 @@ use solana_program::{
     program_pack::{Pack, Sealed},
 };
 
+use crate::curve::stable_curve::StableCurve;
 use crate::curve::{
     calculator::CurveCalculator, constant_product::ConstantProductCurve, flat::FlatCurve,
 };
@@ -20,6 +21,8 @@ pub enum CurveType {
     ConstantProduct,
     /// Flat line, always providing 1:1 from one token to another
     Flat,
+    /// Stable, Like uniswap, but with wide zone of 1:1 instead of one point
+    Stable,
 }
 
 /// Concrete struct to wrap around the trait object which performs calculation.
@@ -92,6 +95,7 @@ impl Pack for SwapCurve {
                     Box::new(ConstantProductCurve::unpack_from_slice(calculator)?)
                 }
                 CurveType::Flat => Box::new(FlatCurve::unpack_from_slice(calculator)?),
+                CurveType::Stable => Box::new(StableCurve::unpack_from_slice(calculator)?),
             },
         })
     }

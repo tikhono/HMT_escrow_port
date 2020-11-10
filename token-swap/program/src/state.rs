@@ -56,6 +56,32 @@ impl IsInitialized for SwapInfo {
 impl Pack for SwapInfo {
     const LEN: usize = 291;
 
+    fn pack_into_slice(&self, output: &mut [u8]) {
+        let output = array_mut_ref![output, 0, 291];
+        let (
+            is_initialized,
+            nonce,
+            token_program_id,
+            token_a,
+            token_b,
+            pool_mint,
+            token_a_mint,
+            token_b_mint,
+            pool_fee_account,
+            swap_curve,
+        ) = mut_array_refs![output, 1, 1, 32, 32, 32, 32, 32, 32, 32, 65];
+        is_initialized[0] = self.is_initialized as u8;
+        nonce[0] = self.nonce;
+        token_program_id.copy_from_slice(self.token_program_id.as_ref());
+        token_a.copy_from_slice(self.token_a.as_ref());
+        token_b.copy_from_slice(self.token_b.as_ref());
+        pool_mint.copy_from_slice(self.pool_mint.as_ref());
+        token_a_mint.copy_from_slice(self.token_a_mint.as_ref());
+        token_b_mint.copy_from_slice(self.token_b_mint.as_ref());
+        pool_fee_account.copy_from_slice(self.pool_fee_account.as_ref());
+        self.swap_curve.pack_into_slice(&mut swap_curve[..]);
+    }
+
     /// Unpacks a byte buffer into a [SwapInfo](struct.SwapInfo.html).
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
         let input = array_ref![input, 0, 291];
@@ -88,32 +114,6 @@ impl Pack for SwapInfo {
             pool_fee_account: Pubkey::new_from_array(*pool_fee_account),
             swap_curve: SwapCurve::unpack_from_slice(swap_curve)?,
         })
-    }
-
-    fn pack_into_slice(&self, output: &mut [u8]) {
-        let output = array_mut_ref![output, 0, 291];
-        let (
-            is_initialized,
-            nonce,
-            token_program_id,
-            token_a,
-            token_b,
-            pool_mint,
-            token_a_mint,
-            token_b_mint,
-            pool_fee_account,
-            swap_curve,
-        ) = mut_array_refs![output, 1, 1, 32, 32, 32, 32, 32, 32, 32, 65];
-        is_initialized[0] = self.is_initialized as u8;
-        nonce[0] = self.nonce;
-        token_program_id.copy_from_slice(self.token_program_id.as_ref());
-        token_a.copy_from_slice(self.token_a.as_ref());
-        token_b.copy_from_slice(self.token_b.as_ref());
-        pool_mint.copy_from_slice(self.pool_mint.as_ref());
-        token_a_mint.copy_from_slice(self.token_a_mint.as_ref());
-        token_b_mint.copy_from_slice(self.token_b_mint.as_ref());
-        pool_fee_account.copy_from_slice(self.pool_fee_account.as_ref());
-        self.swap_curve.pack_into_slice(&mut swap_curve[..]);
     }
 }
 

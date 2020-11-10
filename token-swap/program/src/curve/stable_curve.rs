@@ -116,7 +116,7 @@ impl CurveCalculator for StableCurve {
         let y = compute_y(
             swap_source_amount + source_amount,
             compute_d(swap_source_amount, swap_destination_amount),
-        );
+        )?;
         let dy = swap_destination_amount.checked_sub(y)?;
         let dy_fee = dy.checked_mul(1)?.checked_div(1000)?;
 
