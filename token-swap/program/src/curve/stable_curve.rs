@@ -43,7 +43,7 @@ fn compute_d(amp: u128, amount_a: u128, amount_b: u128) -> Option<u128> {
     let n_coins: u128 = 2; // n
     let amount_a_times_coins = amount_a.checked_mul(n_coins)?;
     let amount_b_times_coins = amount_b.checked_mul(n_coins)?;
-    let mut sum_x = amount_a.checked_add(amount_b)?; // sum(x_i), a.k.a S
+    let sum_x = amount_a.checked_add(amount_b)?; // sum(x_i), a.k.a S
     if sum_x == 0 {
         Some(0)
     } else {
@@ -76,17 +76,18 @@ fn compute_d(amp: u128, amount_a: u128, amount_b: u128) -> Option<u128> {
 /// Solve for y:
 /// y**2 + y * (sum' - (A*n**n - 1) * D / (A * n**n)) = D ** (n + 1) / (n ** (2 * n) * prod' * A)
 /// y**2 + b*y = c
-fn compute_y(amp: u128, x: u128, d: u128) -> Option<u128> {
+fn compute_y(amp: u128, new_source_amount: u128, d: u128) -> Option<u128> {
     // XXX: Curve uses u256
     let n_coins: u128 = 2;
     let leverage = amp.checked_mul(n_coins)?; // A * n
 
     // sum' = prod' = x
     // c =  D ** (n + 1) / (n ** (2 * n) * prod' * A)
-    let c = checked_pow(d, 3)?
-        .checked_div(x.checked_mul(checked_pow(n_coins, 2)?.checked_mul(leverage)?)?)?;
+    let c = checked_pow(d, 3)?.checked_div(
+        new_source_amount.checked_mul(checked_pow(n_coins, 2)?.checked_mul(leverage)?)?,
+    )?;
     // b = sum' - (A*n**n - 1) * D / (A * n**n)
-    let b = x.checked_add(d.checked_div(leverage)?)?; // d is subtracted on line 82
+    let b = new_source_amount.checked_add(d.checked_div(leverage)?)?; // d is subtracted on line 82
 
     // Solve for y by approximating: y**2 + b*y = c
     let mut y_prev: u128;
@@ -114,9 +115,10 @@ impl CurveCalculator for StableCurve {
         swap_source_amount: u128,
         swap_destination_amount: u128,
     ) -> Option<SwapResult> {
+        let new_source_amount = swap_source_amount.checked_add(source_amount)?;
         let new_destination_amount_without_fee = compute_y(
             self.amp as u128,
-            swap_source_amount.checked_add(source_amount)?,
+            new_source_amount,
             compute_d(
                 self.amp as u128,
                 swap_source_amount,
@@ -134,7 +136,6 @@ impl CurveCalculator for StableCurve {
                 .checked_sub(owner_fee)?,
         )?;
         let new_destination_amount = swap_destination_amount.checked_sub(amount_swapped)?;
-        let new_source_amount = swap_source_amount.checked_add(source_amount)?;
         Some(SwapResult {
             new_source_amount,
             new_destination_amount,
