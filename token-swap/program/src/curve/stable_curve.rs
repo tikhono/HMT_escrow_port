@@ -77,7 +77,6 @@ fn compute_d(amp: u128, amount_a: u128, amount_b: u128) -> Option<u128> {
 /// y**2 + b*y = c
 fn compute_y(amp: u128, x: u128, d: u128) -> Option<u128> {
     // XXX: Curve uses u256
-    // TODO: Handle overflows
     let n_coins: u128 = 2;
     let leverage = amp.checked_mul(n_coins)?; // A * n
 
@@ -114,7 +113,7 @@ impl CurveCalculator for StableCurve {
         swap_source_amount: u128,
         swap_destination_amount: u128,
     ) -> Option<SwapResult> {
-        let y = compute_y(
+        let new_destination_amount_without_fee = compute_y(
             self.amp as u128,
             swap_source_amount.checked_add(source_amount)?,
             compute_d(
@@ -123,18 +122,23 @@ impl CurveCalculator for StableCurve {
                 swap_destination_amount,
             )?,
         )?;
-        let dy = swap_destination_amount.checked_sub(y)?;
-        let dy_fee = self.trading_fee(dy)?;
-        let owner_fee = self.owner_trading_fee(source_amount)?;
+        let amount_swapped_without_fee =
+            swap_destination_amount.checked_sub(new_destination_amount_without_fee)?;
+        let trade_fee = self.trading_fee(amount_swapped_without_fee)?;
+        let owner_fee = self.owner_trading_fee(amount_swapped_without_fee)?;
 
-        let amount_swapped = dy.checked_sub(dy_fee)?;
+        let amount_swapped = map_zero_to_none(
+            amount_swapped_without_fee
+                .checked_sub(trade_fee)?
+                .checked_sub(owner_fee)?,
+        )?;
         let new_destination_amount = swap_destination_amount.checked_sub(amount_swapped)?;
         let new_source_amount = swap_source_amount.checked_add(source_amount)?;
         Some(SwapResult {
             new_source_amount,
             new_destination_amount,
             amount_swapped,
-            trade_fee: dy_fee,
+            trade_fee,
             owner_fee,
         })
     }
@@ -154,6 +158,15 @@ impl CurveCalculator for StableCurve {
             trading_tokens,
             u128::try_from(self.trade_fee_numerator).ok()?,
             u128::try_from(self.trade_fee_denominator).ok()?,
+        )
+    }
+
+    /// Calculate the owner trading fee in trading tokens
+    fn owner_trading_fee(&self, trading_tokens: u128) -> Option<u128> {
+        calculate_fee(
+            trading_tokens,
+            u128::try_from(self.owner_trade_fee_numerator).ok()?,
+            u128::try_from(self.owner_trade_fee_denominator).ok()?,
         )
     }
 
@@ -365,10 +378,10 @@ mod tests {
             .swap(source_amount, swap_source_amount, swap_destination_amount)
             .unwrap();
         assert_eq!(result.new_source_amount, 1100);
-        assert_eq!(result.amount_swapped, 2063);
-        assert_eq!(result.new_destination_amount, 47919);
-        assert_eq!(result.trade_fee, 1);
-        assert_eq!(result.owner_fee, 1000);
+        assert_eq!(result.amount_swapped, 2022);
+        assert_eq!(result.new_destination_amount, 47978);
+        assert_eq!(result.trade_fee, 20);
+        assert_eq!(result.owner_fee, 41);
     }
 
     #[test]
