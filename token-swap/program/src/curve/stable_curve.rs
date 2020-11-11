@@ -76,26 +76,26 @@ fn compute_d(amp: u128, amount_a: u128, amount_b: u128) -> Option<u128> {
 /// Solve for y:
 /// y**2 + y * (sum' - (A*n**n - 1) * D / (A * n**n)) = D ** (n + 1) / (n ** (2 * n) * prod' * A)
 /// y**2 + b*y = c
-fn compute_y(amp: u128, new_source_amount: u128, d: u128) -> Option<u128> {
+fn compute_dest(amp: u128, new_source_amount: u128, d_val: u128) -> Option<u128> {
     // XXX: Curve uses u256
     let n_coins: u128 = 2;
     let leverage = amp.checked_mul(n_coins)?; // A * n
 
     // sum' = prod' = x
     // c =  D ** (n + 1) / (n ** (2 * n) * prod' * A)
-    let c = checked_pow(d, 3)?.checked_div(
+    let c = checked_pow(d_val, 3)?.checked_div(
         new_source_amount.checked_mul(checked_pow(n_coins, 2)?.checked_mul(leverage)?)?,
     )?;
     // b = sum' - (A*n**n - 1) * D / (A * n**n)
-    let b = new_source_amount.checked_add(d.checked_div(leverage)?)?; // d is subtracted on line 82
+    let b = new_source_amount.checked_add(d_val.checked_div(leverage)?)?; // d is subtracted on line 82
 
     // Solve for y by approximating: y**2 + b*y = c
     let mut y_prev: u128;
-    let mut y = d;
+    let mut y = d_val;
     for _ in 0..128 {
         y_prev = y;
         y = (checked_pow(y, 2)?.checked_add(c)?)
-            .checked_div(y.checked_mul(2)?.checked_add(b)?.checked_sub(d)?)?;
+            .checked_div(y.checked_mul(2)?.checked_add(b)?.checked_sub(d_val)?)?;
         if y > y_prev {
             if y.checked_sub(y_prev)? <= 1 {
                 break;
@@ -116,7 +116,7 @@ impl CurveCalculator for StableCurve {
         swap_destination_amount: u128,
     ) -> Option<SwapResult> {
         let new_source_amount = swap_source_amount.checked_add(source_amount)?;
-        let new_destination_amount_without_fee = compute_y(
+        let new_destination_amount_without_fee = compute_dest(
             self.amp as u128,
             new_source_amount,
             compute_d(
