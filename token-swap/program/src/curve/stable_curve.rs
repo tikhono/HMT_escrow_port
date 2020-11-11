@@ -43,7 +43,7 @@ fn compute_d(amp: u128, amount_a: u128, amount_b: u128) -> Option<u128> {
     let n_coins: u128 = 2; // n
     let amount_a_times_coins = amount_a.checked_mul(n_coins)?;
     let amount_b_times_coins = amount_b.checked_mul(n_coins)?;
-    let sum_x = amount_a.checked_add(amount_b)?; // sum(x_i), a.k.a S
+    let mut sum_x = amount_a.checked_add(amount_b)?; // sum(x_i), a.k.a S
     if sum_x == 0 {
         Some(0)
     } else {
@@ -56,7 +56,9 @@ fn compute_d(amp: u128, amount_a: u128, amount_b: u128) -> Option<u128> {
             d_p = d_p.checked_mul(d)?.checked_div(amount_a_times_coins)?;
             d_p = d_p.checked_mul(d)?.checked_div(amount_b_times_coins)?;
             d_prev = d;
+            //d = (leverage * sum_x + d_p * n_coins) * d / ((leverage - 1) * d + (n_coins + 1) * d_p);
             d = (leverage * sum_x + d_p * n_coins) * d / ((leverage - 1) * d + (n_coins + 1) * d_p);
+
             // Equality with the precision of 1
             if d > d_p {
                 if d.checked_sub(d_prev)? <= 1 {
@@ -66,7 +68,6 @@ fn compute_d(amp: u128, amount_a: u128, amount_b: u128) -> Option<u128> {
                 break;
             }
         }
-
         Some(d)
     }
 }
@@ -319,7 +320,7 @@ mod tests {
         let swap_source_amount = 1_000;
         let swap_destination_amount = 50_000;
         let trade_fee_numerator = 1;
-        let trade_fee_denominator = 1000;
+        let trade_fee_denominator = 1_000;
         let owner_trade_fee_numerator = 0;
         let owner_trade_fee_denominator = 0;
         let owner_withdraw_fee_numerator = 0;
