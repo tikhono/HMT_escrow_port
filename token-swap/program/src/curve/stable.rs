@@ -391,8 +391,10 @@ mod tests {
         let source_amount: u128 = 100;
         let swap_source_amount: u128 = 1000;
         let swap_destination_amount: u128 = 50000;
-        let mut curve = StableCurve::default();
-        curve.amp = 1;
+        let curve = StableCurve {
+            amp: 1,
+            ..Default::default()
+        };
 
         let result = curve
             .swap(source_amount, swap_source_amount, swap_destination_amount)
