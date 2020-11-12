@@ -54,10 +54,10 @@ impl IsInitialized for SwapInfo {
 }
 
 impl Pack for SwapInfo {
-    const LEN: usize = 291;
+    const LEN: usize = 299;
 
     fn pack_into_slice(&self, output: &mut [u8]) {
-        let output = array_mut_ref![output, 0, 291];
+        let output = array_mut_ref![output, 0, 299];
         let (
             is_initialized,
             nonce,
@@ -69,7 +69,7 @@ impl Pack for SwapInfo {
             token_b_mint,
             pool_fee_account,
             swap_curve,
-        ) = mut_array_refs![output, 1, 1, 32, 32, 32, 32, 32, 32, 32, 65];
+        ) = mut_array_refs![output, 1, 1, 32, 32, 32, 32, 32, 32, 32, 73];
         is_initialized[0] = self.is_initialized as u8;
         nonce[0] = self.nonce;
         token_program_id.copy_from_slice(self.token_program_id.as_ref());
@@ -84,7 +84,7 @@ impl Pack for SwapInfo {
 
     /// Unpacks a byte buffer into a [SwapInfo](struct.SwapInfo.html).
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
-        let input = array_ref![input, 0, 291];
+        let input = array_ref![input, 0, 299];
         #[allow(clippy::ptr_offset_with_cast)]
         let (
             is_initialized,
@@ -97,7 +97,7 @@ impl Pack for SwapInfo {
             token_b_mint,
             pool_fee_account,
             swap_curve,
-        ) = array_refs![input, 1, 1, 32, 32, 32, 32, 32, 32, 32, 65];
+        ) = array_refs![input, 1, 1, 32, 32, 32, 32, 32, 32, 32, 73];
         Ok(Self {
             is_initialized: match is_initialized {
                 [0] => false,
@@ -151,6 +151,7 @@ mod tests {
         let owner_withdraw_fee_denominator = 7;
         let host_fee_numerator = 5;
         let host_fee_denominator = 20;
+        let amp: u64 = 1;
         let calculator = Box::new(FlatCurve {
             trade_fee_numerator,
             trade_fee_denominator,
@@ -203,6 +204,7 @@ mod tests {
         packed.extend_from_slice(&owner_withdraw_fee_denominator.to_le_bytes());
         packed.extend_from_slice(&host_fee_numerator.to_le_bytes());
         packed.extend_from_slice(&host_fee_denominator.to_le_bytes());
+        packed.extend_from_slice(&amp.to_le_bytes());
         let unpacked = SwapInfo::unpack(&packed).unwrap();
         assert_eq!(swap_info, unpacked);
 
