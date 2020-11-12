@@ -115,27 +115,27 @@ impl CurveCalculator for StableCurve {
         swap_source_amount: u128,
         swap_destination_amount: u128,
     ) -> Option<SwapResult> {
-        let new_source_amount = swap_source_amount.checked_add(source_amount)?;
-        let new_destination_amount_without_fee = compute_dest(
+        let trade_fee = self.trading_fee(source_amount)?;
+        let owner_fee = self.owner_trading_fee(source_amount)?;
+
+        let new_source_amount_less_fee = swap_source_amount
+            .checked_add(source_amount)?
+            .checked_sub(trade_fee)?
+            .checked_sub(owner_fee)?;
+
+        let new_destination_amount = compute_dest(
             self.amp as u128,
-            new_source_amount,
+            new_source_amount_less_fee,
             compute_d(
                 self.amp as u128,
                 swap_source_amount,
                 swap_destination_amount,
             )?,
         )?;
-        let amount_swapped_without_fee =
-            swap_destination_amount.checked_sub(new_destination_amount_without_fee)?;
-        let trade_fee = self.trading_fee(amount_swapped_without_fee)?;
-        let owner_fee = self.owner_trading_fee(amount_swapped_without_fee)?;
 
-        let amount_swapped = map_zero_to_none(
-            amount_swapped_without_fee
-                .checked_sub(trade_fee)?
-                .checked_sub(owner_fee)?,
-        )?;
-        let new_destination_amount = swap_destination_amount.checked_sub(amount_swapped)?;
+        let amount_swapped =
+            map_zero_to_none(swap_destination_amount.checked_sub(new_destination_amount)?)?;
+        let new_source_amount = swap_source_amount.checked_add(source_amount)?;
         Some(SwapResult {
             new_source_amount,
             new_destination_amount,
@@ -345,9 +345,9 @@ mod tests {
             .swap(source_amount, swap_source_amount, swap_destination_amount)
             .unwrap();
         assert_eq!(result.new_source_amount, 1_100);
-        assert_eq!(result.amount_swapped, 2_081);
-        assert_eq!(result.new_destination_amount, 47_919);
-        assert_eq!(result.trade_fee, 2);
+        assert_eq!(result.amount_swapped, 2_063);
+        assert_eq!(result.new_destination_amount, 47_937);
+        assert_eq!(result.trade_fee, 1);
         assert_eq!(result.owner_fee, 0);
     }
 
@@ -380,10 +380,10 @@ mod tests {
             .swap(source_amount, swap_source_amount, swap_destination_amount)
             .unwrap();
         assert_eq!(result.new_source_amount, 1100);
-        assert_eq!(result.amount_swapped, 2022);
-        assert_eq!(result.new_destination_amount, 47978);
-        assert_eq!(result.trade_fee, 20);
-        assert_eq!(result.owner_fee, 41);
+        assert_eq!(result.amount_swapped, 2024);
+        assert_eq!(result.new_destination_amount, 47976);
+        assert_eq!(result.trade_fee, 1);
+        assert_eq!(result.owner_fee, 2);
     }
 
     #[test]
