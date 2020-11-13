@@ -35,9 +35,24 @@ pub struct StableCurve {
     pub amp: u64,
 }
 
-fn calc_step(initial_d: u128, leverage: u128, sum_x: u128, d_p: u128, n_coins: u128) -> u128 {
-    (leverage * sum_x + d_p * n_coins) * initial_d
-        / ((leverage - 1) * initial_d + (n_coins + 1) * d_p)
+fn calc_step(
+    initial_d: u128,
+    leverage: u128,
+    sum_x: u128,
+    d_p: u128,
+    n_coins: u128,
+) -> Option<u128> {
+    let leverage_mul = leverage.checked_mul(sum_x)?;
+    let d_p_mul = d_p.checked_mul(n_coins)?;
+
+    let l_val = leverage_mul.checked_add(d_p_mul)?.checked_mul(initial_d)?;
+
+    let leverage_sub = leverage.checked_sub(1)?.checked_mul(initial_d)?;
+    let n_coins_sum = n_coins.checked_add(1)?.checked_mul(d_p)?;
+
+    let r_val = leverage_sub.checked_add(n_coins_sum)?;
+
+    l_val.checked_div(r_val)
 }
 
 /// Compute stable swap invariant (D)
@@ -62,7 +77,7 @@ fn compute_d(amp: u128, amount_a: u128, amount_b: u128) -> Option<u128> {
             d_p = d_p.checked_mul(d)?.checked_div(amount_b_times_coins)?;
             d_prev = d;
             //d = (leverage * sum_x + d_p * n_coins) * d / ((leverage - 1) * d + (n_coins + 1) * d_p);
-            d = calc_step(d, leverage, sum_x, d_p, n_coins);
+            d = calc_step(d, leverage, sum_x, d_p, n_coins)?;
             // Equality with the precision of 1
             if d > d_p {
                 if d.checked_sub(d_prev)? <= 1 {
