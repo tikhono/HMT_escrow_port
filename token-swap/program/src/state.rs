@@ -120,14 +120,14 @@ impl Pack for SwapInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::curve::flat::FlatCurve;
+    use crate::curve::stable::StableCurve;
 
     use std::convert::TryInto;
 
     #[test]
     fn test_swap_info_packing() {
         let nonce = 255;
-        let curve_type_raw: u8 = 1;
+        let curve_type_raw: u8 = 2;
         let curve_type = curve_type_raw.try_into().unwrap();
         let token_program_id_raw = [1u8; 32];
         let token_a_raw = [1u8; 32];
@@ -152,7 +152,7 @@ mod tests {
         let host_fee_numerator = 5;
         let host_fee_denominator = 20;
         let amp: u64 = 1;
-        let calculator = Box::new(FlatCurve {
+        let calculator = Box::new(StableCurve {
             trade_fee_numerator,
             trade_fee_denominator,
             owner_trade_fee_numerator,
@@ -161,6 +161,7 @@ mod tests {
             owner_withdraw_fee_denominator,
             host_fee_numerator,
             host_fee_denominator,
+            amp,
         });
         let swap_curve = SwapCurve {
             curve_type,
@@ -180,8 +181,13 @@ mod tests {
             swap_curve,
         };
 
+        println!("Ji");
+
         let mut packed = [0u8; SwapInfo::LEN];
         SwapInfo::pack_into_slice(&swap_info, &mut packed);
+
+        println!("Mi");
+
         let unpacked = SwapInfo::unpack(&packed).unwrap();
         assert_eq!(swap_info, unpacked);
 
