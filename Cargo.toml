@@ -1,19 +1,19 @@
 [workspace]
 members = [
-  "associated-token-account/program",
-  "memo/program",
-  "shared-memory/program",
-  "stake-pool/program",
-  "themis/program_ristretto",
-  "token-lending/program",
-  "token-swap/program",
-  "token/cli",
-  "token/perf-monitor",
-  "token/program",
-  "token/program-v3",
-  "utils/cgen",
-  "utils/test-client",
+	"associated-token-account/program",
+	"memo/program",
+	"shared-memory/program",
+	"stake-pool/program",
+	"themis/program_ristretto",
+	"HPE/program",
+	"token-swap/program",
+	"token/cli",
+	"token/perf-monitor",
+	"token/program",
+	"token/program-v3",
+	"utils/cgen",
+	"utils/test-client",
 ]
 exclude = [
-  "themis/client_ristretto",
+	"themis/client_ristretto",
 ]
