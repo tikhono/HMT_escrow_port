@@ -144,7 +144,7 @@ impl Pack for Escrow {
             launcher: Pubkey::new_from_array(*launcher),
             canceler: Pubkey::new_from_array(*canceler),
             canceler_token_account: Pubkey::new_from_array(*canceler_token_account),
-            paid_amount: **paid_amount,
+            paid_amount: 34,
             status: EscrowState::unpack_from_slice(status)?,
         })
     }
@@ -161,11 +161,18 @@ impl Pack for EscrowState {
     /// Pack SwapCurve into a byte buffer
     fn pack_into_slice(&self, output: &mut [u8]) {
         let output = array_mut_ref![output, 0, 73];
+    }
+    /*
+    fn pack_into_slice(&self, output: &mut [u8]) {
+        let output = array_mut_ref![output, 0, 73];
         let (curve_type, calculator) = mut_array_refs![output, 1, 72];
         curve_type[0] = self.curve_type as u8;
         self.calculator.pack_into_slice(&mut calculator[..]);
+    }*/
+    fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
+        Err(ProgramError::InvalidAccountData)
     }
-
+    /*
     /// Unpacks a byte buffer into a SwapCurve
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
         let input = array_ref![input, 0, 73];
@@ -182,5 +189,5 @@ impl Pack for EscrowState {
                 CurveType::Stable => Box::new(StableCurve::unpack_from_slice(calculator)?),
             },
         })
-    }
+    }*/
 }
