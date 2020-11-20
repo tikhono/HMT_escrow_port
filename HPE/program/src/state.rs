@@ -73,10 +73,10 @@ impl IsInitialized for Escrow {
 }
 
 impl Pack for Escrow {
-    const LEN: usize = 376;
+    const LEN: usize = 299;
 
     fn pack_into_slice(&self, output: &mut [u8]) {
-        let output = array_mut_ref![output, 0, 376];
+        let output = array_mut_ref![output, 0, 299];
         let (
             token_mint,
             token_account,
@@ -91,7 +91,7 @@ impl Pack for Escrow {
             canceler_token_account,
             paid_amount,
             status,
-        ) = mut_array_refs![output, 32, 32, 32, 32, 8, 32, 32, 8, 32, 32, 32, 64, 8];
+        ) = mut_array_refs![output, 32, 32, 32, 32, 1, 32, 32, 1, 32, 32, 32, 8, 1];
         token_mint.copy_from_slice(self.token_mint.as_ref());
         token_account.copy_from_slice(self.token_account.as_ref());
         reputation_oracle.copy_from_slice(self.reputation_oracle.as_ref());
@@ -105,12 +105,13 @@ impl Pack for Escrow {
         launcher.copy_from_slice(self.launcher.as_ref());
         canceler.copy_from_slice(self.canceler.as_ref());
         canceler_token_account.copy_from_slice(self.canceler_token_account.as_ref());
-        paid_amount.clone_from_slice(&&self.paid_amount.to_le_bytes().as_ref());
+        // paid_amount.copy_from_slice(self.paid_amount);
+        *paid_amount = self.paid_amount.to_le_bytes();
         self.status.pack_into_slice(&mut status[..]);
     }
     /// Unpacks a byte buffer into a [SwapInfo](struct.SwapInfo.html).
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
-        let input = array_ref![input, 0, 376];
+        let input = array_ref![input, 0, 299];
         #[allow(clippy::ptr_offset_with_cast)]
         let (
             token_mint,
@@ -126,7 +127,7 @@ impl Pack for Escrow {
             canceler_token_account,
             paid_amount,
             status,
-        ) = array_refs![input, 32, 32, 32, 32, 8, 32, 32, 8, 32, 32, 32, 64, 8];
+        ) = array_refs![input, 32, 32, 32, 32, 1, 32, 32, 1, 32, 32, 32, 8, 1];
         Ok(Self {
             token_mint: Pubkey::new_from_array(*token_mint),
             token_account: Pubkey::new_from_array(*token_account),
@@ -144,7 +145,7 @@ impl Pack for Escrow {
             launcher: Pubkey::new_from_array(*launcher),
             canceler: Pubkey::new_from_array(*canceler),
             canceler_token_account: Pubkey::new_from_array(*canceler_token_account),
-            paid_amount: 34,
+            paid_amount: u64::from_le_bytes(*paid_amount),
             status: EscrowState::unpack_from_slice(status)?,
         })
     }
