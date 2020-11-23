@@ -96,3 +96,17 @@ pub fn initialize_escrow(
         data,
     })
 }
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_instruction_packing() {
+        let check = EscrowInstruction::InitializeEscrow;
+        let packed = check.pack();
+        let expect = Vec::from([1u8]);
+        assert_eq!(packed, expect);
+        let unpacked = EscrowInstruction::unpack(&expect).unwrap();
+        assert_eq!(unpacked, check);
+    }
+}

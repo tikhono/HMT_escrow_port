@@ -97,15 +97,14 @@ impl Pack for Escrow {
         reputation_oracle.copy_from_slice(self.reputation_oracle.as_ref());
         reputation_oracle_token_account
             .copy_from_slice(self.reputation_oracle_token_account.as_ref());
-        reputation_oracle_stake[0] = self.recording_oracle_stake;
-        recording_oracle.copy_from_slice(self.recording_oracle_token_account.as_ref());
+        reputation_oracle_stake[0] = self.reputation_oracle_stake;
+        recording_oracle.copy_from_slice(self.recording_oracle.as_ref());
         recording_oracle_token_account
             .copy_from_slice(self.recording_oracle_token_account.as_ref());
         recording_oracle_stake[0] = self.recording_oracle_stake;
         launcher.copy_from_slice(self.launcher.as_ref());
         canceler.copy_from_slice(self.canceler.as_ref());
         canceler_token_account.copy_from_slice(self.canceler_token_account.as_ref());
-        // paid_amount.copy_from_slice(self.paid_amount);
         *paid_amount = self.paid_amount.to_le_bytes();
         self.status.pack_into_slice(&mut status[..]);
     }
@@ -153,42 +152,83 @@ impl Pack for Escrow {
 
 impl Sealed for EscrowState {}
 impl Pack for EscrowState {
-    /// Size of encoding of all curve parameters, which include fees and any other
-    /// constants used to calculate swaps, deposits, and withdrawals.
-    /// This includes 1 byte for the type, and 72 for the calculator to use as
-    /// it needs.  Some calculators may be smaller than 72 bytes.
-    const LEN: usize = 73;
+    const LEN: usize = 8;
 
     /// Pack SwapCurve into a byte buffer
     fn pack_into_slice(&self, output: &mut [u8]) {
-        let output = array_mut_ref![output, 0, 73];
+        output[0] = *self as u8;
     }
-    /*
-    fn pack_into_slice(&self, output: &mut [u8]) {
-        let output = array_mut_ref![output, 0, 73];
-        let (curve_type, calculator) = mut_array_refs![output, 1, 72];
-        curve_type[0] = self.curve_type as u8;
-        self.calculator.pack_into_slice(&mut calculator[..]);
-    }*/
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
-        Err(ProgramError::InvalidAccountData)
+        match input[0] {
+            1u8 => Ok(EscrowState::Launched),
+            2u8 => Ok(EscrowState::Uninitialized),
+            3u8 => Ok(EscrowState::Cancelled),
+            4u8 => Ok(EscrowState::Completed),
+            5u8 => Ok(EscrowState::Paid),
+            6u8 => Ok(EscrowState::Partial),
+            7u8 => Ok(EscrowState::Pending),
+            _ => Err(ProgramError::InvalidAccountData),
+        }
     }
-    /*
-    /// Unpacks a byte buffer into a SwapCurve
-    fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
-        let input = array_ref![input, 0, 73];
-        #[allow(clippy::ptr_offset_with_cast)]
-        let (curve_type, calculator) = array_refs![input, 1, 72];
-        let curve_type = curve_type[0].try_into()?;
-        Ok(Self {
-            curve_type,
-            calculator: match curve_type {
-                CurveType::ConstantProduct => {
-                    Box::new(ConstantProductCurve::unpack_from_slice(calculator)?)
-                }
-                CurveType::Flat => Box::new(FlatCurve::unpack_from_slice(calculator)?),
-                CurveType::Stable => Box::new(StableCurve::unpack_from_slice(calculator)?),
-            },
-        })
-    }*/
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
+    use solana_program::{
+        program_error::ProgramError,
+        program_pack::{IsInitialized, Pack, Sealed},
+        pubkey::Pubkey,
+    };
+    #[test]
+    fn test_instruction_packing() {
+        let obj = Escrow {
+            status: EscrowState::Launched,
+            token_mint: Pubkey::new_from_array([
+                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25, 26, 27, 28, 29, 30, 31, 32,
+            ]),
+            token_account: Pubkey::new_from_array([
+                2, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25, 26, 27, 28, 29, 30, 31, 32,
+            ]),
+            reputation_oracle: Pubkey::new_from_array([
+                3, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25, 26, 27, 28, 29, 30, 31, 32,
+            ]),
+            reputation_oracle_token_account: Pubkey::new_from_array([
+                4, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25, 26, 27, 28, 29, 30, 31, 32,
+            ]),
+            reputation_oracle_stake: 10,
+            recording_oracle: Pubkey::new_from_array([
+                5, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25, 26, 27, 28, 29, 30, 31, 32,
+            ]),
+            recording_oracle_token_account: Pubkey::new_from_array([
+                6, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25, 26, 27, 28, 29, 30, 31, 32,
+            ]),
+            recording_oracle_stake: 10,
+            launcher: Pubkey::new_from_array([
+                7, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25, 26, 27, 28, 29, 30, 31, 32,
+            ]),
+            canceler: Pubkey::new_from_array([
+                8, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25, 26, 27, 28, 29, 30, 31, 32,
+            ]),
+            canceler_token_account: Pubkey::new_from_array([
+                9, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25, 26, 27, 28, 29, 30, 31, 32,
+            ]),
+            paid_amount: 10,
+        };
+        let mut packed_obj: [u8; 299] = [0; 299];
+        Escrow::pack(obj, &mut packed_obj).unwrap();
+        let unpacked_obj = Escrow::unpack(&packed_obj).unwrap();
+        assert_eq!(unpacked_obj, obj);
+    }
 }
