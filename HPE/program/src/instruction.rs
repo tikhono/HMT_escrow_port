@@ -181,5 +181,33 @@ mod test {
         assert_eq!(packed, expect);
         let unpacked = EscrowInstruction::unpack(&expect).unwrap();
         assert_eq!(unpacked, check);
+
+        let check = EscrowInstruction::BulkPayout;
+        let packed = check.pack();
+        let expect = Vec::from([2u8]);
+        assert_eq!(packed, expect);
+        let unpacked = EscrowInstruction::unpack(&expect).unwrap();
+        assert_eq!(unpacked, check);
+
+        let check = EscrowInstruction::Complete;
+        let packed = check.pack();
+        let expect = Vec::from([3u8]);
+        assert_eq!(packed, expect);
+        let unpacked = EscrowInstruction::unpack(&expect).unwrap();
+        assert_eq!(unpacked, check);
+
+        let check = EscrowInstruction::Abort;
+        let packed = check.pack();
+        let expect = Vec::from([4u8]);
+        assert_eq!(packed, expect);
+        let unpacked = EscrowInstruction::unpack(&expect).unwrap();
+        assert_eq!(unpacked, check);
+
+        let check = EscrowInstruction::Cancel;
+        let packed = check.pack();
+        let expect = Vec::from([5u8]);
+        assert_eq!(packed, expect);
+        let unpacked = EscrowInstruction::unpack(&expect).unwrap();
+        assert_eq!(unpacked, check);
     }
 }
