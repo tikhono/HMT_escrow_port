@@ -100,6 +100,50 @@ impl Processor {
         Ok(())
     }
 
+    /// Processes an [Abort](enum.TokenInstruction.html) instruction.
+    pub fn process_abort(accounts: &[AccountInfo]) -> ProgramResult {
+        let account_info_iter = &mut accounts.iter();
+        let escrow_info = next_account_info(account_info_iter)?;
+
+        let mut escrow = Escrow::unpack_unchecked(&escrow_info.data.borrow())?;
+
+        if escrow.state == EscrowState::Completed {
+            return Err(EscrowError::InvalidInstruction.into()); //"Escrow in Completed status state"
+        }
+        if escrow.state == EscrowState::Paid {
+            return Err(EscrowError::InvalidInstruction.into()); //"Escrow in Paid status state"
+        }
+        //selfdestruct(canceler);
+        //How to translate this to solana? Leave without money for rent???
+
+        Ok(())
+    }
+
+    /// Processes an [Cancel](enum.TokenInstruction.html) instruction.
+    pub fn process_cancel(accounts: &[AccountInfo]) -> ProgramResult {
+        let account_info_iter = &mut accounts.iter();
+        let escrow_info = next_account_info(account_info_iter)?;
+
+        let mut escrow = Escrow::unpack_unchecked(&escrow_info.data.borrow())?;
+
+        if escrow.state == EscrowState::Completed {
+            return Err(EscrowError::InvalidInstruction.into()); //"Escrow in Completed status state"
+        }
+        if escrow.state == EscrowState::Paid {
+            return Err(EscrowError::InvalidInstruction.into()); //"Escrow in Paid status state"
+        }
+        /*
+                uint256 balance = getBalance();
+                require(balance != 0, "EIP20 contract out of funds");
+
+                HMTokenInterface token = HMTokenInterface(eip20);
+                bool success = token.transfer(canceler, balance);
+        */
+        escrow.state = EscrowState::Cancelled;
+
+        Ok(())
+    }
+
     /// Processes an [Instruction](enum.Instruction.html).
     pub fn process(_program_id: &Pubkey, accounts: &[AccountInfo], input: &[u8]) -> ProgramResult {
         let instruction = EscrowInstruction::unpack(input)?;
