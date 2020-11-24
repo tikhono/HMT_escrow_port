@@ -38,7 +38,7 @@ impl Default for EscrowState {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Escrow {
     ///Current status of escrow entity: Uninitialized, Launched, Pending, Partial, Paid, Complete, Cancelled
-    pub status: EscrowState,
+    pub state: EscrowState,
     ///Mint for the token handled by the escrow
     pub token_mint: Pubkey,
     ///Account to hold tokens for sendout, its owner should be escrow contract authority
@@ -68,7 +68,7 @@ pub struct Escrow {
 impl Sealed for Escrow {}
 impl IsInitialized for Escrow {
     fn is_initialized(&self) -> bool {
-        self.status != EscrowState::Uninitialized
+        self.state != EscrowState::Uninitialized
     }
 }
 
@@ -106,7 +106,7 @@ impl Pack for Escrow {
         canceler.copy_from_slice(self.canceler.as_ref());
         canceler_token_account.copy_from_slice(self.canceler_token_account.as_ref());
         *paid_amount = self.paid_amount.to_le_bytes();
-        self.status.pack_into_slice(&mut status[..]);
+        self.state.pack_into_slice(&mut status[..]);
     }
     /// Unpacks a byte buffer into a [SwapInfo](struct.SwapInfo.html).
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
@@ -145,7 +145,7 @@ impl Pack for Escrow {
             canceler: Pubkey::new_from_array(*canceler),
             canceler_token_account: Pubkey::new_from_array(*canceler_token_account),
             paid_amount: u64::from_le_bytes(*paid_amount),
-            status: EscrowState::unpack_from_slice(status)?,
+            state: EscrowState::unpack_from_slice(status)?,
         })
     }
 }
@@ -183,9 +183,12 @@ mod test {
         pubkey::Pubkey,
     };
     #[test]
+    fn test_escrow_state_packing() {}
+
+    #[test]
     fn test_instruction_packing() {
         let obj = Escrow {
-            status: EscrowState::Launched,
+            state: EscrowState::Launched,
             token_mint: Pubkey::new_from_array([
                 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
                 24, 25, 26, 27, 28, 29, 30, 31, 32,

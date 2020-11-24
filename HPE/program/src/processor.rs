@@ -39,7 +39,7 @@ impl Processor {
         }
 
         let obj = Escrow {
-            status: EscrowState::Launched,
+            state: EscrowState::Launched,
             token_mint: *token_mint_info.key,
             token_account: *token_account_info.key,
             reputation_oracle: *reputation_oracle_info.key,
@@ -60,12 +60,44 @@ impl Processor {
 
     /// Processes an [BulkPayout](enum.TokenInstruction.html) instruction.
     pub fn process_bulk_payout(accounts: &[AccountInfo]) -> ProgramResult {
-        Err(ProgramError::InvalidArgument)
+        let account_info_iter = &mut accounts.iter();
+        let escrow_info = next_account_info(account_info_iter)?;
+
+        let mut escrow = Escrow::unpack_unchecked(&escrow_info.data.borrow())?;
+
+        if escrow.state == EscrowState::Launched {
+            return Err(EscrowError::InvalidInstruction.into()); //"Escrow in Launched status state"
+        }
+        if escrow.state == EscrowState::Paid {
+            return Err(EscrowError::InvalidInstruction.into()); //"Escrow in Paid status state"
+        }
+
+        let bulk_paid = true;
+        let balance = 10;
+        if bulk_paid {
+            if escrow.state == EscrowState::Pending {
+                escrow.state = EscrowState::Partial;
+            }
+            if balance == 0 && escrow.state == EscrowState::Partial {
+                escrow.state = EscrowState::Paid;
+            }
+        }
+        Ok(())
     }
 
     /// Processes an [Complete](enum.TokenInstruction.html) instruction.
     pub fn process_complete(accounts: &[AccountInfo]) -> ProgramResult {
-        Err(ProgramError::InvalidArgument)
+        let account_info_iter = &mut accounts.iter();
+        let escrow_info = next_account_info(account_info_iter)?;
+
+        let mut escrow = Escrow::unpack_unchecked(&escrow_info.data.borrow())?;
+
+        if escrow.state != EscrowState::Paid {
+            return Err(EscrowError::InvalidInstruction.into()); //"Escrow not in Paid status state"
+        }
+        escrow.state = EscrowState::Completed;
+
+        Ok(())
     }
 
     /// Processes an [Instruction](enum.Instruction.html).
@@ -78,11 +110,19 @@ impl Processor {
                 Self::process_initialize_escrow(accounts)
             }
             EscrowInstruction::BulkPayout {} => {
-                info!("Instruction: Initialize");
+                info!("Instruction: BulkPayout");
                 Self::process_bulk_payout(accounts)
             }
             EscrowInstruction::Complete {} => {
-                info!("Instruction: Initialize");
+                info!("Instruction: Complete");
+                Self::process_complete(accounts)
+            }
+            EscrowInstruction::Abort {} => {
+                info!("Instruction: Abort");
+                Self::process_complete(accounts)
+            }
+            EscrowInstruction::Cancel {} => {
+                info!("Instruction: Cancel");
                 Self::process_complete(accounts)
             }
         }
