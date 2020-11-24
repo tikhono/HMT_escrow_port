@@ -4,6 +4,7 @@ use crate::error::EscrowError;
 use crate::instruction::EscrowInstruction;
 use crate::state::*;
 use num_traits::FromPrimitive;
+use solana_program::program_error::ProgramError;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     decode_error::DecodeError,
@@ -57,6 +58,16 @@ impl Processor {
         Ok(())
     }
 
+    /// Processes an [BulkPayout](enum.TokenInstruction.html) instruction.
+    pub fn process_bulk_payout(accounts: &[AccountInfo]) -> ProgramResult {
+        Err(ProgramError::InvalidArgument)
+    }
+
+    /// Processes an [Complete](enum.TokenInstruction.html) instruction.
+    pub fn process_complete(accounts: &[AccountInfo]) -> ProgramResult {
+        Err(ProgramError::InvalidArgument)
+    }
+
     /// Processes an [Instruction](enum.Instruction.html).
     pub fn process(_program_id: &Pubkey, accounts: &[AccountInfo], input: &[u8]) -> ProgramResult {
         let instruction = EscrowInstruction::unpack(input)?;
@@ -65,6 +76,14 @@ impl Processor {
             EscrowInstruction::InitializeEscrow {} => {
                 info!("Instruction: Initialize");
                 Self::process_initialize_escrow(accounts)
+            }
+            EscrowInstruction::BulkPayout {} => {
+                info!("Instruction: Initialize");
+                Self::process_bulk_payout(accounts)
+            }
+            EscrowInstruction::Complete {} => {
+                info!("Instruction: Initialize");
+                Self::process_complete(accounts)
             }
         }
     }
