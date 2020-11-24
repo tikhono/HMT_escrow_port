@@ -4,7 +4,6 @@ use crate::error::EscrowError;
 use crate::instruction::EscrowInstruction;
 use crate::state::*;
 use num_traits::FromPrimitive;
-use solana_program::program_error::ProgramError;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     decode_error::DecodeError,
@@ -105,7 +104,7 @@ impl Processor {
         let account_info_iter = &mut accounts.iter();
         let escrow_info = next_account_info(account_info_iter)?;
 
-        let mut escrow = Escrow::unpack_unchecked(&escrow_info.data.borrow())?;
+        let escrow = Escrow::unpack_unchecked(&escrow_info.data.borrow())?;
 
         if escrow.state == EscrowState::Completed {
             return Err(EscrowError::InvalidInstruction.into()); //"Escrow in Completed status state"

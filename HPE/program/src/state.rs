@@ -151,12 +151,25 @@ impl Pack for Escrow {
 }
 
 impl Sealed for EscrowState {}
+impl IsInitialized for EscrowState {
+    fn is_initialized(&self) -> bool {
+        true
+    }
+}
 impl Pack for EscrowState {
-    const LEN: usize = 8;
+    const LEN: usize = 1;
 
     /// Pack SwapCurve into a byte buffer
     fn pack_into_slice(&self, output: &mut [u8]) {
-        output[0] = *self as u8;
+        output[0] = match self {
+            EscrowState::Launched => 1u8,
+            EscrowState::Uninitialized => 2u8,
+            EscrowState::Cancelled => 3u8,
+            EscrowState::Completed => 4u8,
+            EscrowState::Paid => 5u8,
+            EscrowState::Partial => 6u8,
+            EscrowState::Pending => 7u8,
+        };
     }
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
         match input[0] {
@@ -176,14 +189,16 @@ impl Pack for EscrowState {
 mod test {
     use super::*;
 
-    use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
-    use solana_program::{
-        program_error::ProgramError,
-        program_pack::{IsInitialized, Pack, Sealed},
-        pubkey::Pubkey,
-    };
+    use solana_program::{program_pack::Pack, pubkey::Pubkey};
     #[test]
-    fn test_escrow_state_packing() {}
+    fn test_escrow_state_packing() {
+        let state = EscrowState::default();
+        assert_eq!(state, EscrowState::Uninitialized);
+
+        let packed_state: &mut [u8] = &mut [0u8; 1];
+        EscrowState::pack(state, packed_state).unwrap();
+        assert_eq!(state, EscrowState::unpack(packed_state).unwrap());
+    }
 
     #[test]
     fn test_instruction_packing() {
