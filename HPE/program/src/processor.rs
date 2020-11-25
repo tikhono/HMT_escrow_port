@@ -113,6 +113,7 @@ impl Processor {
             return Err(EscrowError::InvalidInstruction.into()); //"Escrow in Paid status state"
         }
         //selfdestruct(canceler);
+        //Send full amount to canceler
         //How to translate this to solana? Leave without money for rent???
 
         Ok(())

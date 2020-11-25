@@ -75,6 +75,7 @@ impl IsInitialized for Escrow {
 impl Pack for Escrow {
     const LEN: usize = 299;
 
+    /// Packs a [EscrowInfo](struct.SwapInfo.html) into a byte buffer.
     fn pack_into_slice(&self, output: &mut [u8]) {
         let output = array_mut_ref![output, 0, 299];
         let (
@@ -108,7 +109,8 @@ impl Pack for Escrow {
         *paid_amount = self.paid_amount.to_le_bytes();
         self.state.pack_into_slice(&mut status[..]);
     }
-    /// Unpacks a byte buffer into a [SwapInfo](struct.SwapInfo.html).
+
+    /// Unpacks a byte buffer into a [EscrowInfo](struct.SwapInfo.html).
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
         let input = array_ref![input, 0, 299];
         #[allow(clippy::ptr_offset_with_cast)]
@@ -159,7 +161,7 @@ impl IsInitialized for EscrowState {
 impl Pack for EscrowState {
     const LEN: usize = 1;
 
-    /// Pack SwapCurve into a byte buffer
+    /// Pack a SwapCurve into a byte buffer.
     fn pack_into_slice(&self, output: &mut [u8]) {
         output[0] = match self {
             EscrowState::Launched => 1u8,
@@ -171,6 +173,8 @@ impl Pack for EscrowState {
             EscrowState::Pending => 7u8,
         };
     }
+
+    /// Unpack a byte buffer into SwapCurve.
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
         match input[0] {
             1u8 => Ok(EscrowState::Launched),
@@ -194,7 +198,48 @@ mod test {
     fn test_escrow_state_packing() {
         let state = EscrowState::default();
         assert_eq!(state, EscrowState::Uninitialized);
+        let packed_state: &mut [u8] = &mut [0u8; 1];
+        EscrowState::pack(state, packed_state).unwrap();
+        assert_eq!(state, EscrowState::unpack(packed_state).unwrap());
 
+        let state = EscrowState::Uninitialized;
+        assert_eq!(state, EscrowState::Uninitialized);
+        let packed_state: &mut [u8] = &mut [0u8; 1];
+        EscrowState::pack(state, packed_state).unwrap();
+        assert_eq!(state, EscrowState::unpack(packed_state).unwrap());
+
+        let state = EscrowState::Launched;
+        assert_eq!(state, EscrowState::Launched);
+        let packed_state: &mut [u8] = &mut [0u8; 1];
+        EscrowState::pack(state, packed_state).unwrap();
+        assert_eq!(state, EscrowState::unpack(packed_state).unwrap());
+
+        let state = EscrowState::Cancelled;
+        assert_eq!(state, EscrowState::Cancelled);
+        let packed_state: &mut [u8] = &mut [0u8; 1];
+        EscrowState::pack(state, packed_state).unwrap();
+        assert_eq!(state, EscrowState::unpack(packed_state).unwrap());
+
+        let state = EscrowState::Completed;
+        assert_eq!(state, EscrowState::Completed);
+        let packed_state: &mut [u8] = &mut [0u8; 1];
+        EscrowState::pack(state, packed_state).unwrap();
+        assert_eq!(state, EscrowState::unpack(packed_state).unwrap());
+
+        let state = EscrowState::Paid;
+        assert_eq!(state, EscrowState::Paid);
+        let packed_state: &mut [u8] = &mut [0u8; 1];
+        EscrowState::pack(state, packed_state).unwrap();
+        assert_eq!(state, EscrowState::unpack(packed_state).unwrap());
+
+        let state = EscrowState::Partial;
+        assert_eq!(state, EscrowState::Partial);
+        let packed_state: &mut [u8] = &mut [0u8; 1];
+        EscrowState::pack(state, packed_state).unwrap();
+        assert_eq!(state, EscrowState::unpack(packed_state).unwrap());
+
+        let state = EscrowState::Pending;
+        assert_eq!(state, EscrowState::Pending);
         let packed_state: &mut [u8] = &mut [0u8; 1];
         EscrowState::pack(state, packed_state).unwrap();
         assert_eq!(state, EscrowState::unpack(packed_state).unwrap());
