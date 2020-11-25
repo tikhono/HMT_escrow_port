@@ -1,5 +1,6 @@
 //! State types
 
+use crate::error::EscrowError;
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 use solana_program::{
     program_error::ProgramError,
@@ -13,17 +14,17 @@ use solana_program::{
 pub enum EscrowState {
     /// Escrow is not yet initialized
     Uninitialized,
-    /// TODO
+    /// Escrow is launched
     Launched,
-    /// TODO
+    /// Escrow is pending
     Pending,
-    /// TODO
+    /// Escrow is partially paid
     Partial,
-    /// TODO
+    /// Escrow is fully paid
     Paid,
-    /// TODO
+    /// Escrow is completed
     Completed,
-    /// TODO
+    /// Escrow is cancelled
     Cancelled,
 }
 
@@ -75,7 +76,7 @@ impl IsInitialized for Escrow {
 impl Pack for Escrow {
     const LEN: usize = 299;
 
-    /// Packs a [EscrowInfo](struct.SwapInfo.html) into a byte buffer.
+    /// Packs a [EscrowInfo](struct.EscrowInfo.html) into a byte buffer.
     fn pack_into_slice(&self, output: &mut [u8]) {
         let output = array_mut_ref![output, 0, 299];
         let (
@@ -110,7 +111,7 @@ impl Pack for Escrow {
         self.state.pack_into_slice(&mut status[..]);
     }
 
-    /// Unpacks a byte buffer into a [EscrowInfo](struct.SwapInfo.html).
+    /// Unpacks a byte buffer into a [EscrowInfo](struct.EscrowInfo.html).
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
         let input = array_ref![input, 0, 299];
         #[allow(clippy::ptr_offset_with_cast)]
@@ -161,7 +162,7 @@ impl IsInitialized for EscrowState {
 impl Pack for EscrowState {
     const LEN: usize = 1;
 
-    /// Pack a SwapCurve into a byte buffer.
+    /// Pack a EscrowState into a byte buffer.
     fn pack_into_slice(&self, output: &mut [u8]) {
         output[0] = match self {
             EscrowState::Launched => 1u8,
@@ -174,7 +175,7 @@ impl Pack for EscrowState {
         };
     }
 
-    /// Unpack a byte buffer into SwapCurve.
+    /// Unpack a byte buffer into EscrowState.
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
         match input[0] {
             1u8 => Ok(EscrowState::Launched),
@@ -184,7 +185,7 @@ impl Pack for EscrowState {
             5u8 => Ok(EscrowState::Paid),
             6u8 => Ok(EscrowState::Partial),
             7u8 => Ok(EscrowState::Pending),
-            _ => Err(ProgramError::InvalidAccountData),
+            _ => Err(EscrowError::InvalidState.into()),
         }
     }
 }

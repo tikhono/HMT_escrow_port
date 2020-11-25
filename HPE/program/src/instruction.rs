@@ -29,7 +29,7 @@ pub enum EscrowInstruction {
 }
 
 impl EscrowInstruction {
-    /// Unpacks
+    /// Unpacks a byte buffer into [EscrowInstruction](enum.EscrowInstruction.html).
     pub fn unpack(input: &[u8]) -> Result<Self, ProgramError> {
         let (&tag, _rest) = input.split_first().ok_or(EscrowError::InvalidInstruction)?;
         Ok(match tag {
@@ -41,6 +41,7 @@ impl EscrowInstruction {
             _ => return Err(EscrowError::InvalidInstruction.into()),
         })
     }
+
     /// Packs a [EscrowInstruction](enum.EscrowInstruction.html) into a byte buffer.
     pub fn pack(&self) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::with_capacity(size_of::<Self>());
@@ -78,7 +79,7 @@ pub fn initialize_escrow(
     })
 }
 
-/// Creates a `InitializeAccount` instruction.
+/// Creates a `Complete` instruction.
 pub fn complete_escrow(
     token_program_id: &Pubkey,
     account_pubkey: &Pubkey,
@@ -101,7 +102,7 @@ pub fn complete_escrow(
     })
 }
 
-/// Creates a `InitializeAccount` instruction.
+/// Creates a `BulkPayout` instruction.
 pub fn bulk_payout(
     token_program_id: &Pubkey,
     account_pubkey: &Pubkey,
@@ -124,7 +125,7 @@ pub fn bulk_payout(
     })
 }
 
-/// Creates a `InitializeAccount` instruction.
+/// Creates a `Abort` instruction.
 pub fn abort(
     token_program_id: &Pubkey,
     account_pubkey: &Pubkey,
@@ -146,7 +147,7 @@ pub fn abort(
         data,
     })
 }
-/// Creates a `InitializeAccount` instruction.
+/// Creates a `Cancel` instruction.
 pub fn cancel(
     token_program_id: &Pubkey,
     account_pubkey: &Pubkey,

@@ -18,7 +18,7 @@ use solana_program::{
 pub struct Processor {}
 
 impl Processor {
-    /// Processes an [InitializeEscrow](enum.TokenInstruction.html) instruction.
+    /// Processes an [InitializeEscrow](enum.EscrowInstruction.html) instruction.
     pub fn process_initialize_escrow(accounts: &[AccountInfo]) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
         let escrow_info = next_account_info(account_info_iter)?;
@@ -57,7 +57,7 @@ impl Processor {
         Ok(())
     }
 
-    /// Processes an [BulkPayout](enum.TokenInstruction.html) instruction.
+    /// Processes an [BulkPayout](enum.EscrowInstruction.html) instruction.
     pub fn process_bulk_payout(accounts: &[AccountInfo]) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
         let escrow_info = next_account_info(account_info_iter)?;
@@ -84,7 +84,7 @@ impl Processor {
         Ok(())
     }
 
-    /// Processes an [Complete](enum.TokenInstruction.html) instruction.
+    /// Processes an [Complete](enum.EscrowInstruction.html) instruction.
     pub fn process_complete(accounts: &[AccountInfo]) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
         let escrow_info = next_account_info(account_info_iter)?;
@@ -99,7 +99,7 @@ impl Processor {
         Ok(())
     }
 
-    /// Processes an [Abort](enum.TokenInstruction.html) instruction.
+    /// Processes an [Abort](enum.EscrowInstruction.html) instruction.
     pub fn process_abort(accounts: &[AccountInfo]) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
         let escrow_info = next_account_info(account_info_iter)?;
@@ -119,7 +119,7 @@ impl Processor {
         Ok(())
     }
 
-    /// Processes an [Cancel](enum.TokenInstruction.html) instruction.
+    /// Processes an [Cancel](enum.EscrowInstruction.html) instruction.
     pub fn process_cancel(accounts: &[AccountInfo]) -> ProgramResult {
         let account_info_iter = &mut accounts.iter();
         let escrow_info = next_account_info(account_info_iter)?;
@@ -144,7 +144,7 @@ impl Processor {
         Ok(())
     }
 
-    /// Processes an [Instruction](enum.Instruction.html).
+    /// Processes an [Instruction](enum.EscrowInstruction.html).
     pub fn process(_program_id: &Pubkey, accounts: &[AccountInfo], input: &[u8]) -> ProgramResult {
         let instruction = EscrowInstruction::unpack(input)?;
 
@@ -187,6 +187,7 @@ impl PrintProgramError for EscrowError {
             EscrowError::ExpectedAccount => {
                 info!("Error: Deserialized account is not an SPL Token account")
             }
+            EscrowError::InvalidState => info!("Error: Deserialized state is not valid"),
         }
     }
 }

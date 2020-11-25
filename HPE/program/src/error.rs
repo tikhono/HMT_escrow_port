@@ -19,6 +19,9 @@ pub enum EscrowError {
     /// The deserialization of the account returned something besides State::Account.
     #[error("Deserialized account is not an SPL Token account")]
     ExpectedAccount,
+    /// The account cannot be initialized because it is already being used.
+    #[error("Invalid state code")]
+    InvalidState,
 }
 
 impl From<EscrowError> for ProgramError {
@@ -29,6 +32,6 @@ impl From<EscrowError> for ProgramError {
 
 impl<T> DecodeError<T> for EscrowError {
     fn type_of() -> &'static str {
-        "Lending Error"
+        "Escrow Error"
     }
 }
