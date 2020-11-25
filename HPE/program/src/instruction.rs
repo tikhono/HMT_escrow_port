@@ -58,113 +58,87 @@ impl EscrowInstruction {
 
 /// Creates a `InitializeAccount` instruction.
 pub fn initialize_escrow(
-    token_program_id: &Pubkey,
-    account_pubkey: &Pubkey,
-    mint_pubkey: &Pubkey,
-    owner_pubkey: &Pubkey,
+    program_id: Pubkey,
+    state: &Pubkey,
+    token_mint: &Pubkey,
+    token_account: &Pubkey,
+    reputation_oracle: &Pubkey,
+    reputation_oracle_token_account: &Pubkey,
+    recording_oracle: &Pubkey,
+    recording_oracle_token_account: &Pubkey,
+    launcher: &Pubkey,
+    canceler: &Pubkey,
+    canceler_token_account: &Pubkey,
 ) -> Result<Instruction, ProgramError> {
     let data = EscrowInstruction::InitializeEscrow.pack();
 
     let accounts = vec![
-        AccountMeta::new(*account_pubkey, false),
-        AccountMeta::new_readonly(*mint_pubkey, false),
-        AccountMeta::new_readonly(*owner_pubkey, false),
-        AccountMeta::new_readonly(sysvar::rent::id(), false),
+        AccountMeta::new(*state, false),
+        AccountMeta::new_readonly(*token_mint, false),
+        AccountMeta::new_readonly(*token_account, false),
+        AccountMeta::new_readonly(*reputation_oracle, false),
+        AccountMeta::new_readonly(*reputation_oracle_token_account, false),
+        AccountMeta::new_readonly(*recording_oracle, false),
+        AccountMeta::new_readonly(*recording_oracle_token_account, false),
+        AccountMeta::new_readonly(*launcher, false),
+        AccountMeta::new_readonly(*canceler, false),
+        AccountMeta::new_readonly(*canceler_token_account, false),
     ];
 
     Ok(Instruction {
-        program_id: *token_program_id,
+        program_id,
         accounts,
         data,
     })
 }
 
 /// Creates a `Complete` instruction.
-pub fn complete_escrow(
-    token_program_id: &Pubkey,
-    account_pubkey: &Pubkey,
-    mint_pubkey: &Pubkey,
-    owner_pubkey: &Pubkey,
-) -> Result<Instruction, ProgramError> {
-    let data = EscrowInstruction::Complete.pack();
+pub fn complete_escrow(program_id: Pubkey, state: &Pubkey) -> Result<Instruction, ProgramError> {
+    let data = EscrowInstruction::InitializeEscrow.pack();
 
-    let accounts = vec![
-        AccountMeta::new(*account_pubkey, false),
-        AccountMeta::new_readonly(*mint_pubkey, false),
-        AccountMeta::new_readonly(*owner_pubkey, false),
-        AccountMeta::new_readonly(sysvar::rent::id(), false),
-    ];
+    let accounts = vec![AccountMeta::new(*state, false)];
 
     Ok(Instruction {
-        program_id: *token_program_id,
+        program_id,
         accounts,
         data,
     })
 }
 
 /// Creates a `BulkPayout` instruction.
-pub fn bulk_payout(
-    token_program_id: &Pubkey,
-    account_pubkey: &Pubkey,
-    mint_pubkey: &Pubkey,
-    owner_pubkey: &Pubkey,
-) -> Result<Instruction, ProgramError> {
-    let data = EscrowInstruction::BulkPayout.pack();
+pub fn bulk_payout(program_id: Pubkey, state: &Pubkey) -> Result<Instruction, ProgramError> {
+    let data = EscrowInstruction::InitializeEscrow.pack();
 
-    let accounts = vec![
-        AccountMeta::new(*account_pubkey, false),
-        AccountMeta::new_readonly(*mint_pubkey, false),
-        AccountMeta::new_readonly(*owner_pubkey, false),
-        AccountMeta::new_readonly(sysvar::rent::id(), false),
-    ];
+    let accounts = vec![AccountMeta::new(*state, false)];
 
     Ok(Instruction {
-        program_id: *token_program_id,
+        program_id,
         accounts,
         data,
     })
 }
 
 /// Creates a `Abort` instruction.
-pub fn abort(
-    token_program_id: &Pubkey,
-    account_pubkey: &Pubkey,
-    mint_pubkey: &Pubkey,
-    owner_pubkey: &Pubkey,
-) -> Result<Instruction, ProgramError> {
-    let data = EscrowInstruction::Abort.pack();
+pub fn abort(program_id: Pubkey, state: &Pubkey) -> Result<Instruction, ProgramError> {
+    let data = EscrowInstruction::InitializeEscrow.pack();
 
-    let accounts = vec![
-        AccountMeta::new(*account_pubkey, false),
-        AccountMeta::new_readonly(*mint_pubkey, false),
-        AccountMeta::new_readonly(*owner_pubkey, false),
-        AccountMeta::new_readonly(sysvar::rent::id(), false),
-    ];
+    let accounts = vec![AccountMeta::new(*state, false)];
 
     Ok(Instruction {
-        program_id: *token_program_id,
+        program_id,
         accounts,
         data,
     })
 }
-/// Creates a `Cancel` instruction.
-pub fn cancel(
-    token_program_id: &Pubkey,
-    account_pubkey: &Pubkey,
-    mint_pubkey: &Pubkey,
-    owner_pubkey: &Pubkey,
-) -> Result<Instruction, ProgramError> {
-    let data = EscrowInstruction::Cancel.pack();
 
-    let accounts = vec![
-        AccountMeta::new(*account_pubkey, false),
-        AccountMeta::new_readonly(*mint_pubkey, false),
-        AccountMeta::new_readonly(*owner_pubkey, false),
-        AccountMeta::new_readonly(sysvar::rent::id(), false),
-    ];
+/// Creates a `Cancel` instruction.
+pub fn cancel(program_id: Pubkey, state: &Pubkey) -> Result<Instruction, ProgramError> {
+    let data = EscrowInstruction::InitializeEscrow.pack();
+
+    let accounts = vec![AccountMeta::new(*state, false)];
 
     Ok(Instruction {
-        program_id: *token_program_id,
+        program_id,
         accounts,
         data,
     })
